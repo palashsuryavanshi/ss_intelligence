@@ -1,5 +1,6 @@
 package com.ssintelligence.app.ui.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,7 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
@@ -25,6 +28,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
@@ -62,11 +68,13 @@ fun ScreenshotDetailScreen(
     locator: ServiceLocator,
     screenshotId: Long,
     onBack: () -> Unit,
+    onOpenScreenshot: (Long) -> Unit = {},
     viewModel: ScreenshotDetailViewModel = viewModel(
         factory = ScreenshotDetailViewModel.Factory(locator, screenshotId)
     ),
 ) {
     val detail by viewModel.detail.collectAsStateWithLifecycle()
+    val semantic by viewModel.semanticDetail.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -140,6 +148,29 @@ fun ScreenshotDetailScreen(
 
             item("detected") {
                 SectionHeader("Detected information")
+            }
+
+            val semanticDetail = semantic
+            if (semanticDetail != null) {
+                if (semanticDetail.summary.isNotBlank()) {
+                    item("summary") {
+                        InfoCard(title = "Summary") {
+                            Text(
+                                text = semanticDetail.summary,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                }
+                if (semanticDetail.categories.isNotEmpty()) {
+                    item("categories") {
+                        CategoryCard(
+                            categories = semanticDetail.categories,
+                            onSelect = viewModel::onCategorySelected,
+                            onClear = viewModel::onCategoryCleared,
+                        )
+                    }
+                }
             }
 
             if (current.urls.isNotEmpty()) {
@@ -245,6 +276,20 @@ fun ScreenshotDetailScreen(
                 MetadataRow("Added", DateFormats.formatDateTime(current.screenshot.dateAdded))
                 MetadataRow("Modified", DateFormats.formatDateTime(current.screenshot.dateModified))
             }
+
+            val relatedIds = semantic?.relatedIds.orEmpty()
+            if (relatedIds.isNotEmpty()) {
+                item("related-header") {
+                    SectionHeader("Related screenshots")
+                }
+                item("related") {
+                    RelatedRow(
+                        locator = locator,
+                        ids = relatedIds,
+                        onOpenScreenshot = onOpenScreenshot,
+                    )
+                }
+            }
         }
     }
 }
@@ -319,6 +364,119 @@ private fun DateRow(date: ExtractedDate) {
 }
 
 private const val OCR_MAX_VISIBLE_LINES = 40
+
+/**
+ * Categories with user correction (§21).
+ *
+ * The automatic categories are shown as chips; "Change" opens the full list.
+ * A user choice is stored separately and is never overwritten by re-runs of
+ * the classifier — the correction survives because it lives in a `user` row.
+ */
+@Composable
+private fun CategoryCard(
+    categories: List<com.ssintelligence.app.semantic.CategoryAssignment>,
+    onSelect: (com.ssintelligence.app.semantic.ScreenshotCategory) -> Unit,
+    onClear: () -> Unit,
+) {
+    var choosing by remember { mutableStateOf(false) }
+    val userChosen = categories.any { it.classifierVersion == "user" }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Categories",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Row {
+                    if (userChosen) {
+                        TextButton(onClick = onClear) { Text("Reset") }
+                    }
+                    TextButton(onClick = { choosing = !choosing }) {
+                        Text(if (choosing) "Done" else "Change")
+                    }
+                }
+            }
+            if (!choosing) {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    categories.forEach { assignment ->
+                        com.ssintelligence.app.ui.search.InfoChip(
+                            label = assignment.category.label,
+                            emphasised = assignment.classifierVersion == "user",
+                        )
+                    }
+                }
+                if (userChosen) {
+                    Text(
+                        text = "You chose this category. Automatic classification will not override it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    com.ssintelligence.app.semantic.ScreenshotCategory.entries.forEach { category ->
+                        androidx.compose.material3.FilterChip(
+                            selected = categories.any { it.category == category },
+                            onClick = { onSelect(category) },
+                            label = { Text(category.label) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Horizontally scrolling related screenshots (§22).
+ *
+ * Ranked by embedding similarity plus shared entities, categories and hosts —
+ * never just the neighbours in time.
+ */
+@Composable
+private fun RelatedRow(
+    locator: ServiceLocator,
+    ids: List<Long>,
+    onOpenScreenshot: (Long) -> Unit,
+) {
+    val repository = locator.screenshotRepository
+    androidx.compose.foundation.lazy.LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(ids, key = { it }) { id ->
+            val screenshot by repository.observeScreenshot(id)
+                .collectAsStateWithLifecycle(initialValue = null)
+            screenshot?.let { shot ->
+                com.ssintelligence.app.ui.common.ScreenshotThumbnail(
+                    screenshot = shot,
+                    modifier = Modifier
+                        .size(96.dp)
+                        .clickable { onOpenScreenshot(id) },
+                    contentDescription = "Related screenshot: ${shot.filename}",
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun PhoneRow(phone: ExtractedPhone) {

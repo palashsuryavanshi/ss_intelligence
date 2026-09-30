@@ -6,7 +6,7 @@ It discovers the screenshots already on your device, reads their text with on-de
 extracts structured information (links, dates, phone numbers, prices, one-time codes),
 detects exact duplicates, and makes all of it searchable — with the network switched off.
 
-Search understands a sentence rather than a keyword:
+Search understands a sentence rather than a keyword list:
 
 > Find the screenshot where I saw Pixel 9a for ₹39,999
 
@@ -15,8 +15,14 @@ screenshots satisfying both are ranked first. Prices, dates, domains, phone numb
 one-time codes are all understood in plain words. Everything runs on-device; there is no
 model, no account and no network permission.
 
-Phase 3 would add optional local semantic search. It is deliberately out of scope; the
-seam for it already exists. See [Roadmap](#roadmap).
+Phase 3 adds meaning: a query like `travel booking` finds flight tickets and hotel
+reservations even when neither word appears in the screenshot, through a built-in local
+semantic index — still with no download, no network permission, and no account. Screenshots
+are also categorized, summarized, grouped into smart collections, and linked to related
+screenshots, all on-device.
+
+Phase 4 would add visual search and richer cross-screenshot relationships. It is
+deliberately out of scope; the seams for it already exist. See [Roadmap](#roadmap).
 
 ---
 
@@ -54,6 +60,7 @@ and no crash reporter.
 | No network access | `INTERNET` permission absent from the manifest |
 | No account | No auth code, no login screen, no third-party identity SDK |
 | No cloud OCR | ML Kit model is **bundled** in the APK (`com.google.mlkit:text-recognition`), not downloaded via Play Services |
+| No cloud AI | The semantic index is **built in**: hashed text embeddings plus a curated concept graph, no model file, no download, no inference server |
 | OCR stays local | `InputImage.fromFilePath` is handed the MediaStore URI directly |
 | Index stays local | Room database in app-private storage; excluded from backup |
 | Originals untouched | The app only reads. It never writes, moves or deletes a screenshot |
@@ -163,7 +170,12 @@ Everything below was run on an emulator (API 36 / SDK 37) rather than assumed:
 - A query with no exact match showed the relaxation notice rather than silently widening
 - The debug inspector reported intent, terms, prices, candidate count, relaxation level and
   per-result scores for the same query
-- 257 unit tests and 48 instrumented tests pass; release build succeeds under R8
+- Meaning-based search verified on-device: `Build meaning index` embedded 82 screenshots in
+  ~5 seconds; a `travel booking` query with no travel content answered honestly with no
+  results instead of the whole library; the detail page showed an extractive summary,
+  categories and related screenshots; Settings reported `hashed-ngram v1` with per-row
+  coverage and the privacy dashboard stated each guarantee with its mechanism
+- 302 unit tests and 67 instrumented tests pass; release build succeeds under R8
 
 Five bugs were found only by running this on a device, and all are now fixed and covered by
 regression tests:
@@ -179,6 +191,19 @@ regression tests:
    the mismatch only surfaces as an `AbstractMethodError` at runtime, including during a real
    database migration on a user's device.
 
+Phase 3 added three more device-only findings:
+
+6. FTS4 silently rejects a prefix query combined with `OR` (`"a"* OR "b"*` matches nothing);
+   the relaxed rung and the semantic prefilter silently returned nothing until the OR form
+   dropped the prefix star.
+7. A rebuild worker looped forever on textless screenshots: an empty string can never be
+   embedded, so those rows stayed "stale" permanently while the progress counter climbed
+   past 5,000 for 83 screenshots. Stale selection now excludes blank OCR, and the worker
+   carries a circuit breaker.
+8. An unfiltered `FILTERS_ONLY` rung answered text queries with the whole library disguised
+   as results, masking the semantic fallback. A text query with no constraints left now
+   tries meaning first, and answers no-results honestly if that fails too.
+
 ---
 
 ## Tests
@@ -188,18 +213,23 @@ regression tests:
 ./gradlew connectedDebugAndroidTest  # Room + full search engine, requires a device/emulator
 ```
 
-**257 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
-screenshot heuristics, FTS query construction, and the whole Phase 2 search layer: the
-query parser and each of its sub-parsers, intent classification, the ranker, snippet
-extraction and currency rendering. The search layer is deliberately free of Android
-dependencies so it is testable as plain JVM code.
+**302 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
+screenshot heuristics, FTS query construction, the whole Phase 2 search layer (query parser
+and each sub-parser, intent classification, ranker, snippets, currency rendering), and the
+Phase 3 semantic layer (deterministic embeddings, concept expansion, hybrid scoring,
+rule classification, extractive summaries, entities, sensitive flags, smart groups). The
+search and semantic layers are deliberately free of Android dependencies so they are
+testable as plain JVM code.
 
-**48 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
+**67 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
 search, search ranking, filters, duplicate lookup, the pending queue, stale-work recovery,
-incremental re-indexing, keyset pagination, index rebuild and OTP isolation from search), the
-v1→v2 schema migration, and the complete search engine against a real SQLite engine —
-keyword, phrase, price, price-operator, combined, date, URL, phone, code, duplicate, filter,
-sort and deletion cases, plus a 10,000-row performance suite.
+incremental re-indexing, keyset pagination, index rebuild and OTP isolation from search),
+both schema migrations, the complete Phase 2 engine against a real SQLite engine, and the
+Phase 3 hybrid engine over a fixed six-screenshot benchmark library — keyword, phrase,
+price, combined, date, URL, phone, code, duplicate, filter, sort, deletion, semantic
+concept queries, hybrid ordering, exact-match dominance, duplicate collapsing, the
+no-browse-masquerade rule, and Room-level semantic cascade behaviour — plus a 10,000-row
+performance suite.
 
 One test is worth calling out because it guards a real bug found during development:
 `searchMatchesMultipleTermsAsAnd` asserts both that multi-term search works *and* that the
@@ -400,6 +430,12 @@ of search.
 > with no error. `FtsQueryBuilder` therefore combines terms with the *implicit* AND
 > (plain whitespace), which the engine ANDs itself. An instrumented test asserts both halves of
 > this so it cannot regress unnoticed.
+>
+> A second silent rejection in the same family was found in Phase 3: a **prefix query
+> combined with `OR`** — `"travel"* OR "booking"*` — also matches zero rows with no error,
+> while `"travel" OR "booking"` works. The OR form (relaxed-search rung, semantic prefilter)
+> is therefore exact-token only; prefix recall still comes from the AND rungs. A regression
+> test pins the emitted shape against a real database.
 
 ---
 
@@ -566,6 +602,23 @@ dropped at a time, and the rung that produced the answer is stated in plain lang
 Silently weakening a query would misrepresent what was asked for, so the notice is part of
 the contract rather than decoration.
 
+One masking rule keeps the ladder honest: when a text query reaches `FILTERS_ONLY` with no
+structured constraint left, running it would list the whole library disguised as results.
+Instead the engine tries the semantic index, and if that has nothing either, the answer is
+no results — never a browse pretending to be a search.
+
+### Duplicate collapsing
+
+Byte-identical screenshots collapse into one result (`3 identical screenshots`) instead of
+filling the first page with the same image, and identical OCR text gets the same treatment.
+The hidden members stay reachable from the duplicates screen, so nothing is buried.
+
+### Result mode indicator
+
+Every result list says which half of the engine answered: `Meaning-based results` when the
+semantic index contributed, `Text matches` otherwise. Semantic hits carry a `Related to
+"…"` reason naming the concept, never an embedding value or a similarity number.
+
 ### Filters, sorting, history
 
 Filter chips (`All`, `Prices`, `Dates`, `Links`, `Numbers`, `Codes`, `Duplicates`) and the
@@ -607,10 +660,93 @@ interface SemanticSearchProvider {
 }
 ```
 
-`SemanticSearchProvider.Disabled` is the only implementation, and the fusion step that would
-consume it is already in place — semantic search is an *addition* to the deterministic engine,
-never a replacement for it. `ScreenshotProcessor`, `ImageSimilarityDetector` and the extractor
-interfaces are similarly open for extension.
+`SemanticSearchProvider.Disabled` is the only neural-signal implementation, and the fusion
+step that would consume it is kept — semantic search is an *addition* to the deterministic
+engine, never a replacement for it. Phase 3's built-in semantic index (below) plugs in
+through `SemanticRepository` instead. `ScreenshotProcessor`, `ImageSimilarityDetector` and
+the extractor interfaces are similarly open for extension.
+
+---
+
+## Meaning-based search
+
+Phase 3 answers queries by meaning as well as by words. `travel booking` finds flight
+tickets and hotel reservations even when neither word appears in the screenshot; `phone
+deal` surfaces listings through the concepts they belong to. The architecture is hybrid by
+design — the deterministic engine from Phase 2 always runs first and always works alone:
+
+```
+User Query → Query Parser → Structured Search ─┐
+                                               ├→ Candidate Fusion → Hybrid Ranker → Results
+              Query concepts → Vector Search ───┘
+```
+
+### The local model question
+
+There is no neural model in this phase, and that is a decision rather than a gap. A
+downloaded embedding model would need either a multi-hundred-megabyte APK addition or a
+runtime download — and a runtime download needs the `INTERNET` permission, which would
+break the structural privacy guarantee this whole app is built on. The spec explicitly
+prefers a deterministic implementation over forcing a model in, and the measured result
+below shows the deterministic index answers the benchmark queries.
+
+What ships instead, as the `EmbeddingProvider` implementation:
+
+- **Hashed text embeddings** (`hashed-ngram v1`, 512 dimensions): word unigrams, word
+  bigrams and character trigrams hashed with FNV-1a into a TF-weighted, L2-normalized
+  vector. Tolerant to OCR misreads (`Pixcl` still shares most trigrams with `Pixel`),
+  plurals and compounding. 2 KB per screenshot; vectors load only for the prefiltered
+  candidate set, never for the whole library.
+- **A curated concept graph** (`travel → flight, hotel, ticket, PNR…`): the semantic
+  jump from `travel booking` to a boarding pass comes from an explicit, reviewable table —
+  not from emergent model behaviour. Bounded (3 concepts, 12 terms per query) so
+  expansion cannot flood results with false positives.
+- **Cosine similarity** over normalized vectors, with a 0.25 floor below which
+  "similar" is noise.
+
+The `EmbeddingProvider` interface (model name, version, dimension, availability) means a
+neural model can replace this provider later without touching storage, ranking or UI.
+Every stored embedding carries its model identity, and mixing versions is refused loudly
+rather than silently.
+
+### Hybrid scoring
+
+Three normalized signals combine by configurable weight (starting point 45 / 35 / 20):
+
+```
+final = lexical × 0.45 + semantic × 0.35 + metadata × 0.20
+```
+
+The exact-match guarantee is arithmetic, not a special case: a full lexical + metadata
+match scores ~65 before semantics is counted, while a semantic-only match caps at 35. No
+embedding, however close, can outrank an exact match. A test pins this invariant so a
+future re-tuning breaks loudly instead of silently.
+
+### Categories, summaries, related
+
+- **Automatic categories** (Shopping, Receipts, Travel, Flights, Hotels, Finance, … —
+  20 total) from weighted evidence rules, never from a single keyword: `flight mode`
+  mentions flight and must not become Travel. Multi-label, confidence-stamped with the
+  classifier version, and user corrections are stored separately and never overwritten.
+- **Extractive summaries** assembled from stated facts only — `Pixel 9a — ₹39,999 —
+  Amazon`. No paraphrase, no inference, nothing to hallucinate; a test asserts the summary
+  introduces no word the screenshot did not contain.
+- **Related screenshots** on the detail page, ranked by embedding similarity plus shared
+  entities, categories and hosts — never just neighbours in time.
+- **Smart collections** on Home, grouped by category/host/phrase with labels from the
+  members' own words (`Pixel / Shopping`), surfaced only with 3+ members.
+- **Sensitive flags** (OTP, banking, payment, identity, password, private chat) kept
+  internal and used to keep such screenshots out of suggestions and previews.
+
+### Semantic index management
+
+Embeddings and categories derive automatically as screenshots are indexed, and a `Build
+meaning index` worker backfills the rest in resumable chunks with visible progress. The
+worker prefers charging + idle for catch-up runs, skips textless screenshots (an empty
+string embeds to the zero vector — and once looped a rebuild forever, see below), and
+carries a circuit breaker so stalled progress stops visibly instead of draining the
+battery silently. `Delete meaning index` removes embeddings and automatic categories while
+keeping screenshots, OCR, metadata and user corrections.
 
 ---
 
@@ -739,10 +875,10 @@ replacement, so the app stays completely functional with no model present.
 |---|---|---|---|
 | 1 | Local indexing, OCR, extraction, duplicates, keyword search | — | done |
 | 2 | Structured query search, ranking, relaxed fallback, suggestions | — | done |
-| 3 | Local semantic search (optional, on-device embeddings) | `SemanticSearchProvider` + the fusion step in `LocalSearchEngine` | seam ready, `Disabled` by default |
-| 4 | Automatic categorization | new extractor stage in `ScreenshotProcessor` | not started |
-| 5 | Merge duplicates, collections, timeline | `duplicate/` package, new tables | not started |
-| 6 | Paging 3 over search results | `SearchRequest.limit` → `Pager` | not started |
+| 3 | Local semantic search, categories, summaries, related, groups | `SemanticRepository`, `EmbeddingProvider` | done |
+| 4 | Visual search (image embeddings), collections, timeline, entity graph | new tables + `SemanticRepository` | not started |
+| 5 | Paging 3 over search results | `SearchRequest.limit` → `Pager` | not started |
+| 6 | Optional neural embedding model replacing `HashedNgramEmbeddingProvider` | `EmbeddingProvider` | not started |
 
 Settings shows unimplemented toggles disabled with an explicit "planned for a later release"
 note, rather than shipping no-op controls.

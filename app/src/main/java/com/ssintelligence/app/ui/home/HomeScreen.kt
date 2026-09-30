@@ -52,6 +52,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(locator)),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val groups by viewModel.groups.collectAsStateWithLifecycle()
     val recent by locator.screenshotRepository
         .observeRecent(RECENT_LIMIT)
         .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -118,6 +119,18 @@ fun HomeScreen(
                     )
                 }
             } else {
+                if (groups.isNotEmpty()) {
+                    item("collections-header") {
+                        SectionHeader("Smart Collections")
+                    }
+                    items(groups, key = { "group-${it.id}" }) { group ->
+                        SmartGroupCard(
+                            group = group,
+                            locator = locator,
+                            onOpenScreenshot = onOpenScreenshot,
+                        )
+                    }
+                }
                 item("recent-header") {
                     SectionHeader("Recent screenshots")
                 }
@@ -218,5 +231,59 @@ private fun ActionRow(
 private fun formatCount(value: Int): String =
     if (value < 1000) value.toString()
     else value.toString().reversed().chunked(3).joinToString(",").reversed()
+
+/**
+ * One smart collection (§24).
+ *
+ * Shows the cover (newest member), the honest label, and the member count.
+ * Tapping opens the cover; the full group is a search away, so the card stays
+ * small. Groups with fewer than three members are never built, so every card
+ * here earned its place.
+ */
+@Composable
+private fun SmartGroupCard(
+    group: com.ssintelligence.app.semantic.SmartGroup,
+    locator: ServiceLocator,
+    onOpenScreenshot: (Long) -> Unit,
+) {
+    val cover by locator.screenshotRepository.observeScreenshot(group.coverId)
+        .collectAsStateWithLifecycle(initialValue = null)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+        onClick = { onOpenScreenshot(group.coverId) },
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            cover?.let {
+                com.ssintelligence.app.ui.common.ScreenshotThumbnail(
+                    screenshot = it,
+                    modifier = com.ssintelligence.app.ui.common.thumbnailModifier(),
+                    contentDescription = null,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = group.label,
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = "${group.size} screenshots",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
 
 private const val RECENT_LIMIT = 12

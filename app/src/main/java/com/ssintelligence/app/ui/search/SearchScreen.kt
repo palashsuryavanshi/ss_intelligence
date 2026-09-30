@@ -304,11 +304,7 @@ private fun ResultsContent(
         }
 
         item("count") {
-            Text(
-                text = "${state.results.size} result${if (state.results.size == 1) "" else "s"}",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            ResultCountLine(state = state)
         }
 
         items(state.results, key = { it.screenshot.id }) { result ->
@@ -317,6 +313,34 @@ private fun ResultsContent(
                 onClick = { onOpenScreenshot(result.screenshot.id) },
             )
         }
+    }
+}
+
+/**
+ * Result count with the search-mode indicator (§46).
+ *
+ * "Meaning-based results" appears only when the semantic index actually
+ * contributed; otherwise the honest label is "Text matches". The distinction
+ * is the transparency the spec asks for: the user should know which half of
+ * the engine answered.
+ */
+@Composable
+private fun ResultCountLine(state: SearchUiState.Results) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = "${state.results.size} result${if (state.results.size == 1) "" else "s"}",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = if (state.response.semanticUsed) {
+                "Meaning-based results"
+            } else {
+                "Text matches"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

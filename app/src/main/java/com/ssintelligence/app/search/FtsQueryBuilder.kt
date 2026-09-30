@@ -40,7 +40,12 @@ object FtsQueryBuilder {
      * the raw string here would undo that work.
      *
      * @param or when true, terms are combined with `OR` instead of the implicit
-     *   AND. This backs the [RelaxationLevel.ANY_TERM] fallback (§29).
+     *   AND. This backs the [RelaxationLevel.ANY_TERM] fallback and the semantic
+     *   prefilter. OR terms are matched *without* the trailing prefix star:
+     *   this FTS4 configuration silently matches nothing when a prefix query
+     *   is combined with OR (verified on-device: `"a"* OR "b"*` returns zero
+     *   rows while `"a" OR "b"` works). The AND path keeps prefix matching, so
+     *   recall for partial words still comes from the strict rungs.
      */
     fun buildFromTerms(terms: List<String>, conjunction: Conjunction = Conjunction.AND): String? {
         val cleaned = terms
@@ -49,8 +54,10 @@ object FtsQueryBuilder {
             .distinct()
             .take(MAX_TERMS)
         if (cleaned.isEmpty()) return null
-        val joiner = if (conjunction == Conjunction.OR) " OR " else " "
-        return cleaned.joinToString(joiner) { "\"${escape(it)}\"*" }
+        if (conjunction == Conjunction.OR) {
+            return cleaned.joinToString(" OR ") { "\"${escape(it)}\"" }
+        }
+        return cleaned.joinToString(" ") { "\"${escape(it)}\"*" }
     }
 
     private fun tokenize(rawQuery: String): List<String> =

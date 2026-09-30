@@ -55,11 +55,16 @@ fun SettingsScreen(
     val databaseSize by viewModel.databaseSizeBytes.collectAsStateWithLifecycle()
     val searchHistoryEnabled by viewModel.searchHistoryEnabled.collectAsStateWithLifecycle()
     val searchHistoryCount by viewModel.searchHistoryCount.collectAsStateWithLifecycle()
+    val semanticEnabled by viewModel.semanticEnabled.collectAsStateWithLifecycle()
+    val embeddedCount by viewModel.embeddedCount.collectAsStateWithLifecycle()
+    val completedCount by viewModel.completedCount.collectAsStateWithLifecycle()
+    val rebuildProgress by viewModel.semanticRebuildProgress.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showClearConfirm by remember { mutableStateOf(false) }
     var showRebuildConfirm by remember { mutableStateOf(false) }
     var showClearSearchHistory by remember { mutableStateOf(false) }
+    var showClearSemanticIndex by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings") }) },
@@ -101,6 +106,27 @@ fun SettingsScreen(
                 storedQueries = searchHistoryCount,
                 onEnabledChange = { viewModel.onSearchHistoryEnabledChange(it) },
                 onClear = { viewModel.onClearSearchHistory() },
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingsHeader("Meaning-based search")
+            SemanticSearchSection(
+                enabled = semanticEnabled,
+                embedded = embeddedCount,
+                completed = completedCount,
+                rebuildProgress = rebuildProgress,
+                modelInfo = viewModel.semanticModelInfo,
+                onEnabledChange = viewModel::onSemanticEnabledChange,
+                onRebuild = viewModel::onBuildSemanticIndex,
+                onClear = { showClearSemanticIndex = true },
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingsHeader("Privacy dashboard")
+            PrivacyDashboard(
+                searchHistoryEnabled = searchHistoryEnabled,
+                storedQueries = searchHistoryCount,
+                semanticEnabled = semanticEnabled,
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
@@ -188,6 +214,32 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearSearchHistory = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showClearSemanticIndex) {
+        AlertDialog(
+            onDismissRequest = { showClearSemanticIndex = false },
+            title = { Text("Delete the meaning-based index?") },
+            text = {
+                Text(
+                    "This removes the locally computed embeddings and automatic categories. " +
+                        "Your screenshots, the text read from them, and everything extracted " +
+                        "from that text stay exactly as they are — and text search keeps " +
+                        "working unchanged.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.onClearSemanticIndex()
+                        showClearSemanticIndex = false
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearSemanticIndex = false }) { Text("Cancel") }
             },
         )
     }
@@ -303,6 +355,117 @@ private fun SearchHistorySection(
                 "this device.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Meaning-based search controls (§50).
+ *
+ * There is no model to download: the provider is built in, needs no network,
+ * and works the moment the library is indexed. The switch only decides whether
+ * the semantic half of ranking may run — turning it off leaves the Phase 2
+ * deterministic engine exactly as it was.
+ */
+@Composable
+private fun SemanticSearchSection(
+    enabled: Boolean,
+    embedded: Int,
+    completed: Int,
+    rebuildProgress: Int,
+    modelInfo: com.ssintelligence.app.semantic.SemanticModelInfo,
+    onEnabledChange: (Boolean) -> Unit,
+    onRebuild: () -> Unit,
+    onClear: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Search by meaning", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "Finds screenshots related to your words, not just containing them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = enabled, onCheckedChange = onEnabledChange)
+        }
+
+        MetadataRow("Local model", "${modelInfo.name} v${modelInfo.version}")
+        MetadataRow("Model size", modelInfo.sizeDescription)
+        MetadataRow(
+            label = "Screenshots with meaning data",
+            value = if (completed > 0) "$embedded of $completed" else embedded.toString(),
+        )
+        if (rebuildProgress > 0) {
+            Text(
+                text = "Rebuilding meaning index… $rebuildProgress done",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onRebuild) { Text("Build meaning index") }
+            TextButton(onClick = onClear) { Text("Delete meaning index") }
+        }
+
+        Text(
+            text = "The index is built from text already on this device, runs in the " +
+                "background, and never leaves it. Deleting it keeps your screenshots, " +
+                "their text, and text search untouched.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The privacy dashboard (§41).
+ *
+ * Every row is a verifiable fact about this build, not a marketing claim: no
+ * INTERNET permission, bundled OCR, local database, opt-in history, built-in
+ * semantic index. If any of these stopped being true, the corresponding row
+ * would be a lie — which is why each one names the mechanism, not just the
+ * promise.
+ */
+@Composable
+private fun PrivacyDashboard(
+    searchHistoryEnabled: Boolean,
+    storedQueries: Int,
+    semanticEnabled: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FactRow("Text recognition: on-device (bundled model, no download)")
+        FactRow("Meaning-based search: on-device (built-in, no download)")
+        FactRow("Screenshot database: local, app-private storage")
+        FactRow("Network uploads: none — the app holds no internet permission")
+        FactRow(
+            if (searchHistoryEnabled) {
+                "Search history: on, $storedQueries queries stored locally"
+            } else {
+                "Search history: off, nothing stored"
+            },
+        )
+        FactRow(
+            if (semanticEnabled) {
+                "Meaning index: enabled, local only"
+            } else {
+                "Meaning index: not used for ranking"
+            },
+        )
+        Text(
+            text = "One-time codes stay masked until you reveal them, and sensitive " +
+                "screenshots never appear in suggestions or previews.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
         )
     }
 }

@@ -546,6 +546,24 @@ interface ScreenshotDao {
     )
     suspend fun ocrForPrefix(ftsQuery: String, limit: Int): List<String>
 
+    /**
+     * Row ids matching an FTS expression.
+     *
+     * The semantic prefilter's identity read: the vector step needs ids, not
+     * texts, and this keeps the prefilter to one indexed MATCH plus a bounded
+     * rowid list (§10).
+     */
+    @Query(
+        """
+        SELECT s.id FROM screenshots s
+        JOIN screenshots_fts ON screenshots_fts.rowid = s.id
+        WHERE screenshots_fts MATCH :ftsQuery
+          AND s.status <> 'FAILED'
+        LIMIT :limit
+        """
+    )
+    suspend fun searchIdsByText(ftsQuery: String, limit: Int): List<Long>
+
     // -------------------------------------------------------------- detail
 
     @Query("SELECT * FROM extracted_urls WHERE screenshot_id = :id ORDER BY id")
@@ -562,6 +580,27 @@ interface ScreenshotDao {
 
     @Query("SELECT * FROM extracted_otps WHERE screenshot_id = :id ORDER BY id")
     fun observeOtps(id: Long): Flow<List<ExtractedOtpEntity>>
+
+    // ------------------------------------------------- one-shot detail reads
+
+    /**
+     * Suspend mirrors of the detail observables, for use cases that need one
+     * answer rather than a subscription.
+     */
+    @Query("SELECT * FROM extracted_urls WHERE screenshot_id = :id ORDER BY id")
+    suspend fun urlsForScreenshot(id: Long): List<ExtractedUrlEntity>
+
+    @Query("SELECT * FROM extracted_dates WHERE screenshot_id = :id ORDER BY epoch_day")
+    suspend fun datesForScreenshot(id: Long): List<ExtractedDateEntity>
+
+    @Query("SELECT * FROM extracted_phones WHERE screenshot_id = :id ORDER BY id")
+    suspend fun phonesForScreenshot(id: Long): List<ExtractedPhoneEntity>
+
+    @Query("SELECT * FROM extracted_prices WHERE screenshot_id = :id ORDER BY amount DESC")
+    suspend fun pricesForScreenshot(id: Long): List<ExtractedPriceEntity>
+
+    @Query("SELECT * FROM extracted_otps WHERE screenshot_id = :id ORDER BY id")
+    suspend fun otpsForScreenshot(id: Long): List<ExtractedOtpEntity>
 
     // ----------------------------------------------------------- maintenance
 

@@ -7,8 +7,14 @@ import com.ssintelligence.app.domain.model.ExtractedPhone
 import com.ssintelligence.app.domain.model.ExtractedPrice
 import com.ssintelligence.app.domain.model.ExtractedUrl
 import com.ssintelligence.app.domain.repository.SearchHistoryRepository
+import com.ssintelligence.app.domain.repository.SettingsRepository
 import com.ssintelligence.app.search.parser.PriceQueryParser
 import com.ssintelligence.app.search.parser.QueryParser
+import com.ssintelligence.app.semantic.ConceptQueryExpander
+import com.ssintelligence.app.semantic.HybridRanker
+import com.ssintelligence.app.semantic.HybridSignals
+import com.ssintelligence.app.semantic.QueryExpansionProvider
+import com.ssintelligence.app.semantic.SemanticRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -40,6 +46,14 @@ class LocalSearchEngine(
     private val candidateLimit: Int = CANDIDATE_LIMIT,
     /** Single source of truth for the "around" tolerance, shared with the parser. */
     private val priceTolerance: Double = PriceQueryParser().toleranceFraction,
+    /**
+     * Local semantic index. Null in tests that only exercise the lexical path;
+     * wired in production through the service locator.
+     */
+    private val semanticRepository: SemanticRepository? = null,
+    private val semanticSettings: SettingsRepository? = null,
+    private val expander: QueryExpansionProvider = ConceptQueryExpander(),
+    private val hybridRanker: HybridRanker = HybridRanker(),
 ) : ScreenshotSearchEngine {
 
     private val suggestionBuilder = SearchSuggestionBuilder(dao, history)
@@ -60,25 +74,46 @@ class LocalSearchEngine(
         for (level in ladder(effective)) {
             lastLevel = level
             val plan = planFor(effective, request, level) ?: continue
+            if (level == RelaxationLevel.FILTERS_ONLY && plan.isUnfilteredBrowse() &&
+                effective.ftsTerms.isNotEmpty()
+            ) {
+                // The ladder has nothing left to offer a text query: the only
+                // remaining rung would list the whole library, which answers
+                // nothing. Meaning gets the last word instead — and if it has
+                // nothing either, the honest answer is no results, not a
+                // browse disguised as search.
+                val semanticOnly = semanticFallback(effective, request)
+                if (semanticOnly != null) {
+                    return semanticOnly.copy(elapsedMillis = clock() - startedAt)
+                }
+                break
+            }
             val rows = retrieve(plan)
             if (rows.isEmpty()) continue
 
             val candidates = hydrate(rows)
             if (candidates.isEmpty()) continue
 
-            val fused = fuse(effective, ranker.rank(effective, candidates, clock()))
-            if (fused.isEmpty()) continue
+            val ranked = ranker.rank(effective, candidates, clock())
+            if (ranked.isEmpty()) continue
 
-            val ordered = applySort(fused, request.sortMode)
+            val hybrid = applySemanticFusion(effective, ranked)
+            if (hybrid.results.isEmpty()) continue
+
+            val ordered = applySortResults(hybrid.results, request.sortMode)
             return SearchResponse(
                 query = effective,
-                results = ordered.take(request.limit).map { it.toResult() },
+                results = ordered.take(request.limit),
                 relaxation = level,
                 candidateCount = candidates.size,
                 elapsedMillis = clock() - startedAt,
+                semanticUsed = hybrid.semanticUsed,
             )
         }
 
+        // The loop only exits without returning via the break above (text
+        // query, nothing left) or an empty library. Either way the honest
+        // answer is no results — never a whole-library browse.
         return SearchResponse(
             query = effective,
             results = emptyList(),
@@ -125,8 +160,279 @@ class LocalSearchEngine(
             )
         }
 
+    // ------------------------------------------------- Phase 3 hybrid fusion
+
+    private data class FusedResults(
+        val results: List<SearchResult>,
+        val semanticUsed: Boolean,
+    )
+
     /**
-     * Where a local semantic provider would join in (§51).
+     * Applies the user's sort choice to finished results (§31).
+     *
+     * Sorting applies after duplicate collapsing, so a group keeps the position
+     * its best member earned.
+     */
+    private fun applySortResults(results: List<SearchResult>, sort: SortMode): List<SearchResult> =
+        when (sort) {
+            SortMode.RELEVANCE -> results
+            SortMode.NEWEST -> results.sortedWith(
+                compareByDescending<SearchResult> { it.screenshot.dateAdded }
+                    .thenBy { it.screenshot.id },
+            )
+
+            SortMode.OLDEST -> results.sortedWith(
+                compareBy<SearchResult> { it.screenshot.dateAdded }
+                    .thenBy { it.screenshot.id },
+            )
+        }
+
+    /**
+     * Hybrid lexical + semantic fusion (§4, §13, §33).
+     *
+     * The Phase 2 ranking is the base: every candidate keeps its lexical score
+     * and reasons. The semantic index then contributes a similarity signal per
+     * candidate, plus additional candidates the lexical pass never saw. The
+     * hybrid ranker combines the three signals by weight, and exact matches
+     * stay on top by arithmetic rather than by special-casing (§14).
+     *
+     * Any failure in the semantic half degrades to the lexical ranking, never
+     * to an error (§56).
+     */
+    private suspend fun applySemanticFusion(
+        query: SearchQuery,
+        ranked: List<RankedResult>,
+    ): FusedResults {
+        val semantic = semanticRepository
+        val enabled = semantic != null && semantic.isAvailable &&
+            (semanticSettings?.isSemanticSearchEnabled() ?: true)
+        if (!enabled || ranked.isEmpty()) {
+            return FusedResults(collapseDuplicates(ranked.map { it.toResult() }), false)
+        }
+        return try {
+            fuseWithSemantics(query, ranked, semantic!!)
+        } catch (error: Exception) {
+            FusedResults(collapseDuplicates(ranked.map { it.toResult() }), false)
+        }
+    }
+
+    private suspend fun fuseWithSemantics(
+        query: SearchQuery,
+        ranked: List<RankedResult>,
+        semantic: SemanticRepository,
+    ): FusedResults {
+        val expansionTerms = expander.expandTerms(query.ftsTerms)
+        val semanticMatches = semantic.searchSimilar(
+            queryText = query.originalQuery,
+            expansionTerms = expansionTerms,
+            limit = SemanticRepository.DEFAULT_SEARCH_LIMIT,
+        )
+        if (semanticMatches.isEmpty()) {
+            return FusedResults(collapseDuplicates(ranked.map { it.toResult() }), false)
+        }
+        val similarityById = semanticMatches.associate { it.screenshotId to it.similarity }
+
+        val conceptLabel = expander.conceptsForQuery(query.ftsTerms).firstOrNull()
+        val relatedLabel = conceptLabel ?: query.phrases.firstOrNull() ?: query.originalQuery.trim()
+
+        val scored = ranked.map { result ->
+            val lexical = hybridRanker.normalizeLexical(result.score)
+            val similarity = similarityById[result.candidate.screenshot.id] ?: 0.0
+            val metadata = metadataShare(query, result)
+            val hybrid = hybridRanker.score(HybridSignals(lexical, similarity, metadata))
+            val reasons = if (similarity > 0 &&
+                result.reasons.none { it.kind == MatchKind.SEMANTIC }
+            ) {
+                result.reasons + MatchReason("Related to \"$relatedLabel\"", MatchKind.SEMANTIC)
+            } else {
+                result.reasons
+            }
+            ScoredResult(result, hybrid, reasons, similarity > 0)
+        }
+
+        // Semantic-only candidates: rows the lexical pass never saw. They load
+        // by id, get a snippet, and join the ranking with no lexical score —
+        // which is exactly why they can never outrank an exact match.
+        val knownIds = ranked.map { it.candidate.screenshot.id }.toSet()
+        val extraIds = semanticMatches
+            .filter { it.screenshotId !in knownIds }
+            .take(SEMANTIC_EXTRA_LIMIT)
+            .map { it.screenshotId }
+        val extras = if (extraIds.isEmpty()) {
+            emptyList()
+        } else {
+            dao.getByIds(extraIds).mapNotNull { row ->
+                val similarity = similarityById[row.id] ?: return@mapNotNull null
+                val screenshot = row.toDomain()
+                val needles = (query.phrases + query.textTerms).distinct()
+                val reason = MatchReason("Related to \"$relatedLabel\"", MatchKind.SEMANTIC)
+                ScoredResult(
+                    result = RankedResult(
+                        candidate = RankCandidate(screenshot),
+                        score = 0,
+                        reasons = listOf(reason),
+                        snippet = SnippetBuilder.build(screenshot.ocrText, needles),
+                    ),
+                    hybrid = hybridRanker.score(HybridSignals(0.0, similarity, 0.0)),
+                    reasons = listOf(reason),
+                    semantic = true,
+                )
+            }
+        }
+
+        val combined = (scored + extras).sortedWith(
+            compareByDescending<ScoredResult> { it.hybrid }
+                .thenByDescending { it.result.score }
+                .thenByDescending { it.result.candidate.screenshot.dateAdded }
+                .thenBy { it.result.candidate.screenshot.id },
+        )
+        return FusedResults(
+            collapseDuplicates(combined.map { it.toResult() }),
+            combined.any { it.semantic },
+        )
+    }
+
+    private data class ScoredResult(
+        val result: RankedResult,
+        val hybrid: Double,
+        val reasons: List<MatchReason>,
+        val semantic: Boolean,
+    ) {
+        fun toResult(): SearchResult = SearchResult(
+            screenshot = result.candidate.screenshot,
+            score = result.score,
+            snippet = result.snippet,
+            matches = reasons,
+        )
+    }
+
+    /**
+     * Share of the query's structured constraints this candidate satisfies.
+     *
+     * Counted from the match reasons the Phase 2 ranker already computed, so
+     * the definition of "satisfies" stays in one place.
+     */
+    private fun metadataShare(query: SearchQuery, result: RankedResult): Double {
+        var total = 0
+        var satisfied = 0
+        val kinds = result.reasons.map { it.kind }.toSet()
+        if (query.prices.isNotEmpty()) {
+            total++
+            if (MatchKind.PRICE in kinds) satisfied++
+        }
+        if (query.urls.isNotEmpty()) {
+            total++
+            if (MatchKind.URL in kinds) satisfied++
+        }
+        if (query.phoneNumbers.isNotEmpty()) {
+            total++
+            if (MatchKind.PHONE in kinds) satisfied++
+        }
+        if (query.otpCodes.isNotEmpty()) {
+            total++
+            if (MatchKind.OTP in kinds) satisfied++
+        }
+        if (query.timeRange != null) {
+            total++
+            if (MatchKind.DATE in kinds) satisfied++
+        }
+        if (total == 0) return 0.0
+        return satisfied.toDouble() / total
+    }
+
+    /**
+     * Collapses byte-identical screenshots into one result (§34).
+     *
+     * The best-ranked member represents the group; the rest hide behind
+     * [SearchResult.collapsedIds] for the UI's "N identical screenshots"
+     * expander. Identical OCR text gets the same treatment: a second row with
+     * the same text adds no information, so it joins the first rather than
+     * occupying its own rank (§35).
+     */
+    private fun collapseDuplicates(results: List<SearchResult>): List<SearchResult> {
+        if (results.isEmpty()) return results
+        val out = mutableListOf<SearchResult>()
+        val seenHashes = mutableMapOf<String, Int>()
+        val seenTexts = mutableMapOf<String, Int>()
+        for (result in results) {
+            val hash = result.screenshot.contentHash
+            val textKey = result.screenshot.ocrText.take(SNIPPET_DEDUP_CHARS)
+            val index = if (hash != null) {
+                seenHashes[hash]
+            } else if (result.screenshot.ocrText.isNotBlank()) {
+                seenTexts[textKey]
+            } else {
+                null
+            }
+            if (index == null) {
+                if (hash != null) seenHashes[hash] = out.size
+                if (result.screenshot.ocrText.isNotBlank()) seenTexts[textKey] = out.size
+                out += result
+            } else {
+                val first = out[index]
+                out[index] = first.copy(
+                    collapsedCount = first.collapsedCount + 1,
+                    collapsedIds = first.collapsedIds + result.screenshot.id,
+                )
+            }
+        }
+        return out
+    }
+
+    /**
+     * Last resort: the lexical ladder found nothing at any rung, but meaning
+     * alone may answer. Runs the semantic index standalone and returns whatever
+     * it finds, flagged as semantic so the UI can say "Meaning-based results".
+     */
+    private suspend fun semanticFallback(
+        query: SearchQuery,
+        request: SearchRequest,
+    ): SearchResponse? {
+        val semantic = semanticRepository ?: return null
+        if (!semantic.isAvailable) return null
+        if (semanticSettings?.isSemanticSearchEnabled() == false) return null
+        if (query.originalQuery.isBlank()) return null
+        return try {
+            val expansionTerms = expander.expandTerms(query.ftsTerms)
+            val matches = semantic.searchSimilar(
+                queryText = query.originalQuery,
+                expansionTerms = expansionTerms,
+                limit = SemanticRepository.DEFAULT_SEARCH_LIMIT,
+            )
+            if (matches.isEmpty()) return null
+            val conceptLabel = expander.conceptsForQuery(query.ftsTerms).firstOrNull()
+                ?: query.originalQuery.trim()
+            val rows = dao.getByIds(matches.map { it.screenshotId })
+            val byId = rows.associateBy { it.id }
+            val results = matches.mapNotNull { match ->
+                val row = byId[match.screenshotId] ?: return@mapNotNull null
+                val screenshot = row.toDomain()
+                val needles = (query.phrases + query.textTerms).distinct()
+                SearchResult(
+                    screenshot = screenshot,
+                    score = 0,
+                    snippet = SnippetBuilder.build(screenshot.ocrText, needles),
+                    matches = listOf(
+                        MatchReason("Related to \"$conceptLabel\"", MatchKind.SEMANTIC),
+                    ),
+                )
+            }.take(request.limit)
+            if (results.isEmpty()) return null
+            SearchResponse(
+                query = query,
+                results = collapseDuplicates(applySortResults(results, request.sortMode)),
+                relaxation = RelaxationLevel.FILTERS_ONLY,
+                candidateCount = matches.size,
+                elapsedMillis = 0,
+                semanticUsed = true,
+            )
+        } catch (error: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Where a local semantic provider would join in (§51 Phase 2).
      *
      * With [SemanticSearchProvider.Disabled] this is the identity function: the
      * deterministic ranking is the product, and semantic search is an addition
@@ -413,7 +719,17 @@ class LocalSearchEngine(
         val otp: String?,
         val filterTypes: String,
         val candidateLimit: Int,
-    )
+    ) {
+        /**
+         * True when this plan constrains nothing: no text (null ftsQuery at
+         * FILTERS_ONLY), no band, no phone/domain/code, no date, no content
+         * types. Running it lists the library, which is browsing, not
+         * searching — the caller treats it as such.
+         */
+        fun isUnfilteredBrowse(): Boolean =
+            ftsQuery == null && band == null && phone == null && domain == null &&
+                otp == null && minDateSeconds == null && filterTypes.isEmpty()
+    }
 
     companion object {
         /**
@@ -423,5 +739,11 @@ class LocalSearchEngine(
          * makes at larger sizes.
          */
         const val CANDIDATE_LIMIT = 400
+
+        /** Semantic-only rows admitted per search, beyond the lexical set. */
+        const val SEMANTIC_EXTRA_LIMIT = 20
+
+        /** OCR prefix compared for near-duplicate collapsing in results. */
+        const val SNIPPET_DEDUP_CHARS = 200
     }
 }

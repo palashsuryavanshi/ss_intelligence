@@ -23,4 +23,14 @@ interface SettingsRepository {
      */
     suspend fun isSearchHistoryEnabled(): Boolean
     suspend fun setSearchHistoryEnabled(enabled: Boolean)
+
+    /**
+     * Whether the semantic half of search may run (§50 Phase 3).
+     *
+     * Defaults to on: the provider is built in, needs no download, and costs
+     * no privacy. Turning it off leaves the Phase 2 deterministic engine
+     * exactly as it was.
+     */
+    suspend fun isSemanticSearchEnabled(): Boolean
+    suspend fun setSemanticSearchEnabled(enabled: Boolean)
 }

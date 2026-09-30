@@ -15,6 +15,16 @@ data class SearchResult(
     val score: Int,
     val snippet: Snippet?,
     val matches: List<MatchReason>,
+    /**
+     * Exact-duplicate collapsing (§34 Phase 3).
+     *
+     * When several byte-identical screenshots match, they are one result, not
+     * a wall of the same image. [collapsedCount] is the group size and
+     * [collapsedIds] the hidden members, so the UI can offer "3 identical
+     * screenshots" with an expand action.
+     */
+    val collapsedCount: Int = 1,
+    val collapsedIds: List<Long> = emptyList(),
 )
 
 /** Why a screenshot was selected. Display text only, never a score. */
@@ -38,6 +48,14 @@ enum class MatchKind {
     DATE,
     FILENAME,
     DUPLICATE,
+
+    /**
+     * Matched by meaning, not by words (§28 Phase 3).
+     *
+     * The label names the concept ("Related to \"phone deal\""), never an
+     * embedding value or a similarity number.
+     */
+    SEMANTIC,
 }
 
 /**
@@ -75,6 +93,12 @@ data class SearchResponse(
     val relaxation: RelaxationLevel,
     val candidateCount: Int,
     val elapsedMillis: Long,
+    /**
+     * True when the semantic index contributed to these results (§46 Phase 3).
+     * The UI shows "Meaning-based results" vs "Text matches" from this flag —
+     * transparency about which half of the engine did the work.
+     */
+    val semanticUsed: Boolean = false,
 ) {
     val isEmpty: Boolean get() = results.isEmpty()
 

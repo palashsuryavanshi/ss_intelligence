@@ -5,9 +5,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssintelligence.app.ServiceLocator
 import com.ssintelligence.app.domain.usecase.ObserveIndexingStatsUseCase
+import com.ssintelligence.app.domain.usecase.ObserveSmartGroupsUseCase
+import com.ssintelligence.app.semantic.SmartGroup
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * Home screen state (§22). Everything is derived from database counters so the
@@ -15,6 +20,7 @@ import kotlinx.coroutines.flow.stateIn
  */
 class HomeViewModel(
     private val observeStats: ObserveIndexingStatsUseCase,
+    private val observeGroups: ObserveSmartGroupsUseCase,
     private val locator: ServiceLocator,
 ) : ViewModel() {
 
@@ -23,6 +29,24 @@ class HomeViewModel(
             stats = com.ssintelligence.app.domain.model.IndexingStats(0, 0, 0, 0, 0, 0, 0),
             isIndexing = false,
         ))
+
+    /**
+     * Smart collections, loaded once per subscription rather than observed:
+     * groups change only when the index or the categories change, and a
+     * recompute per keystroke would be waste. Refreshed on demand.
+     */
+    private val _groups = MutableStateFlow(emptyList<SmartGroup>())
+    val groups: StateFlow<List<SmartGroup>> = _groups.asStateFlow()
+
+    init {
+        refreshGroups()
+    }
+
+    fun refreshGroups() {
+        viewModelScope.launch {
+            _groups.value = runCatching { observeGroups() }.getOrDefault(emptyList())
+        }
+    }
 
     fun onScanNow() {
         locator.indexingScheduler.requestIndexing()
@@ -39,6 +63,7 @@ class HomeViewModel(
                 repository = locator.screenshotRepository,
                 scheduler = locator.indexingScheduler,
             ),
+            observeGroups = ObserveSmartGroupsUseCase(locator.screenshotRepository),
             locator = locator,
         ) as T
     }

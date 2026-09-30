@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.ssintelligence.app.ServiceLocator
 import com.ssintelligence.app.domain.model.IndexingScope
+import com.ssintelligence.app.domain.model.ProcessingStatus
 import com.ssintelligence.app.domain.model.ThemeMode
 import com.ssintelligence.app.domain.repository.SettingsRepository
+import com.ssintelligence.app.indexing.SemanticIndexWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -94,6 +96,66 @@ class SettingsViewModel(
 
     private suspend fun refreshSearchHistoryCount() {
         _searchHistoryCount.value = locator.searchHistoryRepository.count()
+    }
+
+    // -------------------------------------------------------------- semantic
+
+    /**
+     * Semantic search state (§50).
+     *
+     * The provider is built in, so there is no download and no install state
+     * to track — only enabled/disabled and how much of the library is
+     * embedded. Disabling leaves the deterministic engine untouched.
+     */
+    private val _semanticEnabled = MutableStateFlow(true)
+    val semanticEnabled: StateFlow<Boolean> = _semanticEnabled
+
+    private val _embeddedCount = MutableStateFlow(0)
+    val embeddedCount: StateFlow<Int> = _embeddedCount
+
+    /** Rows embedded vs rows that could be: the "coverage" behind the toggle. */
+    private val _completedCount = MutableStateFlow(0)
+    val completedCount: StateFlow<Int> = _completedCount
+
+    val semanticRebuildProgress: StateFlow<Int> =
+        SemanticIndexWorker.observeProgress(locator.toApplicationContext())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    val semanticModelInfo get() = locator.semanticRepository.modelInfo
+
+    init {
+        refreshSemantic()
+    }
+
+    fun onSemanticEnabledChange(enabled: Boolean) {
+        viewModelScope.launch {
+            settings.setSemanticSearchEnabled(enabled)
+            _semanticEnabled.value = enabled
+        }
+    }
+
+    fun onBuildSemanticIndex() {
+        SemanticIndexWorker.requestNow(locator.toApplicationContext())
+    }
+
+    fun onClearSemanticIndex() {
+        viewModelScope.launch {
+            locator.semanticRepository.clearSemanticIndex()
+            refreshSemanticCounts()
+        }
+    }
+
+    fun refreshSemantic() {
+        viewModelScope.launch {
+            _semanticEnabled.value = settings.isSemanticSearchEnabled()
+            refreshSemanticCounts()
+        }
+    }
+
+    private suspend fun refreshSemanticCounts() {
+        _embeddedCount.value = locator.semanticRepository.embeddedCount()
+        _completedCount.value =
+            locator.screenshotRepository.countByStatus()[ProcessingStatus.COMPLETED.name] ?: 0
     }
 
     fun onThemeChange(mode: ThemeMode) {

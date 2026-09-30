@@ -198,6 +198,9 @@ private fun MainNavigation(locator: ServiceLocator) {
                 locator = locator,
                 screenshotId = id,
                 onBack = { navController.popBackStack() },
+                // "Find similar" navigates within the same detail destination,
+                // so back returns to the previous screenshot, not to search.
+                onOpenScreenshot = { otherId -> navController.navigate(Routes.detail(otherId)) },
             )
         }
 

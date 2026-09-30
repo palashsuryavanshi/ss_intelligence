@@ -119,6 +119,84 @@ class ClearSearchHistoryUseCase(
     suspend operator fun invoke() = history.clear()
 }
 
+/**
+ * Semantic detail for one screenshot (§47 Phase 3).
+ *
+ * Summary, categories, sensitive flags and related screenshots are derived
+ * locally from the OCR text and the semantic index. Nothing here needs the
+ * network, and nothing here sends anything anywhere.
+ */
+class GetSemanticDetailUseCase(
+    private val semantic: com.ssintelligence.app.semantic.SemanticRepository,
+    private val repository: ScreenshotRepository,
+) {
+    data class SemanticDetail(
+        val summary: String,
+        val categories: List<com.ssintelligence.app.semantic.CategoryAssignment>,
+        val sensitive: Set<com.ssintelligence.app.semantic.SensitiveKind>,
+        val relatedIds: List<Long>,
+    )
+
+    suspend operator fun invoke(screenshotId: Long): SemanticDetail? {
+        val detail = repository.getDetail(screenshotId) ?: return null
+        if (!semantic.isAvailable) {
+            return SemanticDetail(
+                summary = "",
+                categories = emptyList(),
+                sensitive = emptySet(),
+                relatedIds = emptyList(),
+            )
+        }
+        val screenshot = detail.screenshot
+        val document = com.ssintelligence.app.semantic.ScreenshotDocument(
+            screenshotId = screenshotId,
+            ocrText = screenshot.ocrText,
+            filename = screenshot.filename,
+            hosts = detail.urls.map { url -> url.host },
+            prices = detail.prices,
+            dateTexts = detail.dates.map { date -> date.rawText },
+            phoneCount = detail.phones.size,
+            otpCount = detail.otps.size,
+        )
+        val phrases = screenshot.ocrText.lineSequence()
+            .map { line -> line.trim() }
+            .filter { it.length >= 3 }
+            .take(3)
+            .toList()
+        val related = semantic.findSimilarTo(document)
+        return SemanticDetail(
+            summary = semantic.summarize(document, phrases),
+            categories = semantic.categoriesFor(screenshotId),
+            sensitive = com.ssintelligence.app.semantic.SensitiveContentDetector.detect(document),
+            relatedIds = related.map { match -> match.screenshotId },
+        )
+    }
+}
+
+/** User correction of an automatic category (§21 Phase 3). */
+class SetScreenshotCategoryUseCase(
+    private val semantic: com.ssintelligence.app.semantic.SemanticRepository,
+) {
+    suspend operator fun invoke(screenshotId: Long, category: com.ssintelligence.app.semantic.ScreenshotCategory) =
+        semantic.setUserCategory(screenshotId, category)
+}
+
+/** Removes the user's correction, restoring the automatic classification. */
+class ClearScreenshotCategoryUseCase(
+    private val semantic: com.ssintelligence.app.semantic.SemanticRepository,
+) {
+    suspend operator fun invoke(screenshotId: Long) = semantic.clearUserCategory(screenshotId)
+}
+
+/** Smart collections for Home, built from local categories and hosts (§24 Phase 3). */
+class ObserveSmartGroupsUseCase(
+    private val repository: ScreenshotRepository,
+) {
+    suspend operator fun invoke(): List<com.ssintelligence.app.semantic.SmartGroup> =
+        repository.smartGroups()
+}
+
+
 /** Detail data for one screenshot (§24). */
 class GetScreenshotDetailUseCase(
     private val repository: ScreenshotRepository,

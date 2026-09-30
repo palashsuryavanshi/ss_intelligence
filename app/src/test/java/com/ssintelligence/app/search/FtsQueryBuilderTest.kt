@@ -28,9 +28,12 @@ class FtsQueryBuilderTest {
     }
 
     @Test
-    fun `an explicit OR joins the terms`() {
+    fun `an explicit OR joins the terms without prefix matching`() {
+        // FTS4 silently matches nothing when a prefix query is combined with
+        // OR, so the OR form is exact-token only. Guarded on-device by the
+        // orMatchExpression regression test.
         assertEquals(
-            "\"pixel\"* OR \"9a\"*",
+            "\"pixel\" OR \"9a\"",
             FtsQueryBuilder.buildFromTerms(listOf("pixel", "9a"), Conjunction.OR),
         )
     }

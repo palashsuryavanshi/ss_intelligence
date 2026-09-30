@@ -58,10 +58,21 @@ class SettingsRepositoryImpl(
         store.edit { it[SEARCH_HISTORY_ENABLED] = enabled }
     }
 
+    override suspend fun isSemanticSearchEnabled(): Boolean {
+        var enabled = true
+        store.edit { prefs -> enabled = prefs[SEMANTIC_SEARCH_ENABLED] ?: true }
+        return enabled
+    }
+
+    override suspend fun setSemanticSearchEnabled(enabled: Boolean) {
+        store.edit { it[SEMANTIC_SEARCH_ENABLED] = enabled }
+    }
+
     private companion object {
         val THEME = stringPreferencesKey("theme_mode")
         val SCOPE = stringPreferencesKey("indexing_scope")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_complete")
         val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")
+        val SEMANTIC_SEARCH_ENABLED = booleanPreferencesKey("semantic_search_enabled")
     }
 }

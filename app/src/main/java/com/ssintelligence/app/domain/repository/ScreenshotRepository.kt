@@ -20,6 +20,12 @@ interface ScreenshotRepository {
     suspend fun getById(id: Long): Screenshot?
     suspend fun getByMediaStoreId(mediaStoreId: Long): Screenshot?
 
+    /** One-shot detail read for use cases that cannot collect a Flow. */
+    suspend fun getDetail(id: Long): ScreenshotDetail?
+
+    /** Smart collections assembled from categories, hosts and phrases (§24 Phase 3). */
+    suspend fun smartGroups(): List<com.ssintelligence.app.semantic.SmartGroup>
+
     /**
      * Reconciles [images] with the index: inserts new rows as PENDING,
      * refreshes metadata for changed rows (which resets them to PENDING),

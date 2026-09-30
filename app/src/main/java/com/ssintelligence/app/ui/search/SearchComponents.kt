@@ -97,6 +97,10 @@ fun SearchResultCard(
                     MatchReasons(result.matches)
                 }
 
+                if (result.collapsedCount > 1) {
+                    CollapsedNote(count = result.collapsedCount)
+                }
+
                 Text(
                     text = DateFormats.formatDate(result.screenshot.dateAdded),
                     style = MaterialTheme.typography.labelMedium,
@@ -141,6 +145,22 @@ private fun MatchReasons(matches: List<MatchReason>) {
             }
         }
     }
+}
+
+/**
+ * "3 identical screenshots" (§34).
+ *
+ * The group occupies one rank instead of three. Tapping opens the
+ * representative; the hidden members stay reachable from the duplicates
+ * screen, so nothing is buried.
+ */
+@Composable
+private fun CollapsedNote(count: Int) {
+    Text(
+        text = "$count identical screenshots",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /**
@@ -262,6 +282,7 @@ internal fun MatchKindDot(kind: MatchKind, modifier: Modifier = Modifier) {
         MatchKind.PRICE -> MaterialTheme.colorScheme.tertiary
         MatchKind.URL, MatchKind.PHONE -> MaterialTheme.colorScheme.secondary
         MatchKind.OTP -> MaterialTheme.colorScheme.error
+        MatchKind.SEMANTIC -> MaterialTheme.colorScheme.tertiary
         MatchKind.DATE, MatchKind.FILENAME, MatchKind.DUPLICATE -> MaterialTheme.colorScheme.outline
         MatchKind.TERM -> MaterialTheme.colorScheme.outlineVariant
     }

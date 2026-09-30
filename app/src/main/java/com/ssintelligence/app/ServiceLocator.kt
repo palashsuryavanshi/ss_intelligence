@@ -8,6 +8,7 @@ import com.ssintelligence.app.data.media.MediaStoreScreenshotSource
 import com.ssintelligence.app.data.media.ScreenshotSource
 import com.ssintelligence.app.data.repository.SearchHistoryRepositoryImpl
 import com.ssintelligence.app.data.repository.ScreenshotRepositoryFactory
+import com.ssintelligence.app.data.repository.SemanticRepositoryImpl
 import com.ssintelligence.app.data.repository.SettingsRepositoryImpl
 import com.ssintelligence.app.domain.repository.ScreenshotRepository
 import com.ssintelligence.app.domain.repository.SearchHistoryRepository
@@ -21,6 +22,8 @@ import com.ssintelligence.app.ml.ocr.MlKitTextRecognizer
 import com.ssintelligence.app.ml.ocr.TextRecognizer
 import com.ssintelligence.app.search.LocalSearchEngine
 import com.ssintelligence.app.search.ScreenshotSearchEngine
+import com.ssintelligence.app.semantic.HashedNgramEmbeddingProvider
+import com.ssintelligence.app.semantic.SemanticRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,6 +39,9 @@ import kotlinx.coroutines.SupervisorJob
 class ServiceLocator private constructor(context: Context) {
 
     private val appContext: Context = context.applicationContext
+
+    /** Exposed for workers and system services that need a Context. */
+    fun toApplicationContext(): Context = appContext
 
     val applicationScope: CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -57,7 +63,34 @@ class ServiceLocator private constructor(context: Context) {
     }
 
     val searchEngine: ScreenshotSearchEngine by lazy {
-        LocalSearchEngine(dao = database.screenshotDao(), history = searchHistoryRepository)
+        LocalSearchEngine(
+            dao = database.screenshotDao(),
+            history = searchHistoryRepository,
+            semanticRepository = semanticRepository,
+            semanticSettings = settingsRepository,
+        )
+    }
+
+    /**
+     * Local semantic index (§9 Phase 3).
+     *
+     * Built in, not downloaded: the embedding provider needs no model file, so
+     * semantic search works the moment the library is indexed. A neural
+     * provider can replace [HashedNgramEmbeddingProvider] here without
+     * touching anything downstream.
+     */
+    val semanticRepository: SemanticRepository by lazy {
+        SemanticRepositoryImpl(
+            database = database,
+            dao = database.screenshotDao(),
+            semanticDao = database.semanticDao(),
+            provider = HashedNgramEmbeddingProvider(),
+        ).also { semantic ->
+            // Breaks the circular dependency: the repository calls into the
+            // semantic index on save, and the semantic index reads the database.
+            (screenshotRepository as? com.ssintelligence.app.data.repository.ScreenshotRepositoryImpl)
+                ?.semanticRepository = semantic
+        }
     }
 
     private val recognizer: TextRecognizer by lazy {

@@ -26,6 +26,11 @@ import com.ssintelligence.app.domain.model.ProcessingStatus
 import com.ssintelligence.app.domain.model.Screenshot
 import com.ssintelligence.app.domain.model.ScreenshotDetail
 import com.ssintelligence.app.domain.repository.ScreenshotRepository
+import com.ssintelligence.app.semantic.ScreenshotDocument
+import com.ssintelligence.app.semantic.SemanticRepository
+import com.ssintelligence.app.semantic.SmartGroup
+import com.ssintelligence.app.semantic.SmartGroupBuilder
+import com.ssintelligence.app.semantic.ScreenshotCategory
 import com.ssintelligence.app.util.AppLog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -36,9 +41,28 @@ class ScreenshotRepositoryImpl(
     private val context: Context,
     private val database: SsIntelligenceDatabase,
     private val dao: ScreenshotDao,
+    /**
+     * Semantic index, set after construction to break the circular dependency:
+     * the semantic repository needs the database, and this repository calls
+     * into it on save. Null means semantic indexing is disabled.
+     */
+    var semanticRepository: SemanticRepository? = null,
 ) : ScreenshotRepository {
 
     // ------------------------------------------------------------- mapping
+
+    private fun ProcessingResult.toDocument(): ScreenshotDocument = ScreenshotDocument(
+        screenshotId = screenshotId,
+        ocrText = ocrText,
+        filename = "",
+        hosts = urls.map { it.host },
+        prices = prices.map {
+            ExtractedPrice(0, screenshotId, it.rawText, it.currency, it.amount)
+        },
+        dateTexts = dates.map { it.rawText },
+        phoneCount = phones.size,
+        otpCount = otps.size,
+    )
 
     // ------------------------------------------------------------ observing
 
@@ -125,6 +149,76 @@ class ScreenshotRepositoryImpl(
     // -------------------------------------------------------------- queries
 
     override suspend fun getById(id: Long): Screenshot? = dao.getById(id)?.toDomain()
+
+    override suspend fun getDetail(id: Long): ScreenshotDetail? {
+        val row = dao.getById(id) ?: return null
+        return ScreenshotDetail(
+            screenshot = row.toDomain(),
+            urls = dao.urlsForScreenshot(id).map { ExtractedUrl(it.id, it.screenshotId, it.url, it.host) },
+            dates = dao.datesForScreenshot(id).map {
+                ExtractedDate(it.id, it.screenshotId, it.rawText, it.epochDay, it.hasYear)
+            },
+            phones = dao.phonesForScreenshot(id).map {
+                ExtractedPhone(it.id, it.screenshotId, it.rawText, it.normalized, it.country)
+            },
+            prices = dao.pricesForScreenshot(id).map {
+                ExtractedPrice(it.id, it.screenshotId, it.rawText, it.currency, it.amount)
+            },
+            otps = dao.otpsForScreenshot(id).map { ExtractedOtp(it.id, it.screenshotId, it.code) },
+        )
+    }
+
+    /**
+     * Smart collections (§24).
+     *
+     * Takes the largest categories, loads each one's members with the hosts
+     * and words the labeller needs, and lets [SmartGroupBuilder] decide what
+     * is worth surfacing. Bounded throughout: a handful of categories, tens of
+     * members each.
+     */
+    override suspend fun smartGroups(): List<SmartGroup> {
+        val semantic = semanticRepository ?: return emptyList()
+        if (!semantic.isAvailable) return emptyList()
+        val semanticDao = database.semanticDao()
+        val members = mutableListOf<SmartGroupBuilder.GroupMember>()
+        for (count in semanticDao.categoryCounts().take(MAX_GROUP_CATEGORIES)) {
+            val category = runCatching { ScreenshotCategory.valueOf(count.category) }.getOrNull()
+                ?: continue
+            if (category == ScreenshotCategory.OTHER) continue
+            val ids = semanticDao.idsInCategory(count.category, MAX_GROUP_MEMBERS)
+            if (ids.isEmpty()) continue
+            val rows = dao.getByIds(ids).associateBy { it.id }
+            val urls = dao.urlsFor(ids).groupBy { it.screenshotId }
+            for (id in ids) {
+                val row = rows[id] ?: continue
+                members += SmartGroupBuilder.GroupMember(
+                    id = id,
+                    category = category,
+                    hostRoots = urls[id].orEmpty().map { it.host.removePrefix("www.") }.distinct(),
+                    words = topWords(row.ocrText),
+                    dateAdded = row.dateAdded,
+                )
+            }
+        }
+        return SmartGroupBuilder.build(members)
+    }
+
+    /** Most frequent significant words: the group labeller's raw material. */
+    private fun topWords(ocrText: String): List<String> {
+        val stop = setOf(
+            "the", "and", "for", "with", "from", "this", "that", "have", "your",
+            "screenshot", "screenshots", "image", "photo", "https", "http", "www", "com",
+        )
+        return ocrText.lowercase()
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.length >= 4 && it !in stop && !it.all { c -> c.isDigit() } }
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedByDescending { it.value }
+            .take(8)
+            .map { it.key }
+    }
 
     override suspend fun getByMediaStoreId(mediaStoreId: Long): Screenshot? =
         dao.getByMediaStoreId(mediaStoreId)?.toDomain()
@@ -328,6 +422,16 @@ class ScreenshotRepositoryImpl(
                 )
             }
         }
+        // Semantic indexing runs after the transaction commits: it only reads
+        // what was just written, and a failure here must never roll back the
+        // lexical index (§56). Duplicates reuse the canonical row's semantics
+        // implicitly through shared content, so they are still indexed — their
+        // OCR text is what matters, not their originality.
+        runCatching {
+            semanticRepository?.indexScreenshot(result.toDocument())
+        }.onFailure {
+            AppLog.w(TAG, "Semantic indexing failed screenshotId=${result.screenshotId}")
+        }
         AppLog.d(
             TAG,
             "Saved result screenshotId=${result.screenshotId} " +
@@ -358,6 +462,8 @@ class ScreenshotRepositoryImpl(
     private companion object {
         const val TAG = "ScreenshotRepository"
         const val MAX_ERROR_LENGTH = 500
+        const val MAX_GROUP_CATEGORIES = 6
+        const val MAX_GROUP_MEMBERS = 50
     }
 
     /** Holder for the five extracted-information projections. */

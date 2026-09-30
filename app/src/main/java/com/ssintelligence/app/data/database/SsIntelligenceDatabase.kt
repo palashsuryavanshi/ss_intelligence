@@ -31,8 +31,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ExtractedOtpEntity::class,
         OcrBlockEntity::class,
         SearchHistoryEntity::class,
+        ScreenshotEmbeddingEntity::class,
+        ScreenshotCategoryEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class SsIntelligenceDatabase : RoomDatabase() {
@@ -40,6 +42,8 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
     abstract fun screenshotDao(): ScreenshotDao
 
     abstract fun searchHistoryDao(): SearchHistoryDao
+
+    abstract fun semanticDao(): SemanticDao
 
     companion object {
         const val NAME = "ss_intelligence.db"
@@ -73,9 +77,64 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2 → v3 adds the semantic tables: embeddings and categories.
+         *
+         * Both are derived data — they can always be rebuilt from OCR text —
+         * but they are still migrated rather than dropped, because a silent
+         * rebuild of thousands of embeddings on first launch after an upgrade
+         * would be a battery and latency surprise.
+         */
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `screenshot_embeddings` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `vector` BLOB NOT NULL,
+                        `model` TEXT NOT NULL,
+                        `version` TEXT NOT NULL,
+                        `dimension` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_screenshot_embeddings_screenshot_id` " +
+                        "ON `screenshot_embeddings` (`screenshot_id`)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `screenshot_categories` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `confidence` REAL NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `classifier_version` TEXT NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_screenshot_categories_screenshot_id` " +
+                        "ON `screenshot_categories` (`screenshot_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_screenshot_categories_category` " +
+                        "ON `screenshot_categories` (`category`)",
+                )
+            }
+        }
+
         fun build(context: Context): SsIntelligenceDatabase =
             Room.databaseBuilder(context.applicationContext, SsIntelligenceDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 // No destructive fallback: losing an index silently would be
                 // worse than a visible error. "Clear Index" in Settings is the
                 // explicit recovery path.

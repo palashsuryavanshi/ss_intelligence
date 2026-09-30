@@ -310,6 +310,47 @@ class LocalSearchEngineInstrumentedTest {
         assertEquals("dupe.png", results.single().screenshot.filename)
     }
 
+    /**
+     * Regression guard for an FTS4 silent-rejection bug in the same family as
+     * Phase 1's explicit-AND discovery: this configuration matches zero rows
+     * when a prefix query (`"a"*`) is combined with OR, with no error. The
+     * builder therefore emits exact-token OR, and this test pins that the
+     * emitted shape actually matches.
+     */
+    @Test
+    fun orMatchExpressionFindsEitherTerm() = runBlocking {
+        val dao = database.screenshotDao()
+        val added = nowSeconds()
+        dao.insertIgnoring(
+            listOf(
+                ScreenshotEntity(
+                    mediaStoreId = ++mediaCounter,
+                    uri = "content://media/external/images/media/x",
+                    filename = "or_probe.png",
+                    relativePath = "Pictures/Screenshots",
+                    dateAdded = added,
+                    dateModified = added,
+                    fileSize = 100_000,
+                    width = 1080,
+                    height = 2400,
+                    mimeType = "image/png",
+                    ocrText = "booking confirmation number",
+                    contentHash = "hash-or-probe",
+                    duplicateOfId = null,
+                    status = "COMPLETED",
+                    processingError = null,
+                    createdAt = added * 1000,
+                    updatedAt = added * 1000,
+                ),
+            ),
+        )
+        val expression = FtsQueryBuilder.buildFromTerms(
+            listOf("travel", "booking"),
+            FtsQueryBuilder.Conjunction.OR,
+        )!!
+        assertEquals(1, dao.searchIdsByText(expression, 10).size)
+    }
+
     // -------------------------------------------------------- filters
 
     @Test
