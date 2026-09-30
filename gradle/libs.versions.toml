@@ -26,6 +26,7 @@ coil = "3.6.3"
 # Testing
 junit = "4.13.2"
 coroutinesTest = "1.10.2"
+kotlinxSerializationJson = "1.8.1"
 androidxTestCore = "1.7.0"
 androidxTestRunner = "1.7.0"
 androidxTestExtJunit = "1.3.0"
@@ -57,6 +58,10 @@ mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition"
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+# Pinned explicitly: androidx.room:room-migration 2.8.4 needs 1.8.1 to read the
+# exported schema JSON, and an older runtime on the test classpath fails at
+# runtime with an AbstractMethodError rather than at build time.
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }

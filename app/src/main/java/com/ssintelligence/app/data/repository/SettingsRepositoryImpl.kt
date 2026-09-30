@@ -48,9 +48,20 @@ class SettingsRepositoryImpl(
         store.edit { it[ONBOARDING_DONE] = done }
     }
 
+    override suspend fun isSearchHistoryEnabled(): Boolean {
+        var enabled = false
+        store.edit { prefs -> enabled = prefs[SEARCH_HISTORY_ENABLED] ?: false }
+        return enabled
+    }
+
+    override suspend fun setSearchHistoryEnabled(enabled: Boolean) {
+        store.edit { it[SEARCH_HISTORY_ENABLED] = enabled }
+    }
+
     private companion object {
         val THEME = stringPreferencesKey("theme_mode")
         val SCOPE = stringPreferencesKey("indexing_scope")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_complete")
+        val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")
     }
 }

@@ -24,8 +24,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.ssintelligence.app.BuildConfig
 import com.ssintelligence.app.ServiceLocator
 import com.ssintelligence.app.domain.usecase.ObserveOnboardingUseCase
+import com.ssintelligence.app.ui.debug.SearchDebugScreen
 import com.ssintelligence.app.ui.duplicates.DuplicatesScreen
 import com.ssintelligence.app.ui.detail.ScreenshotDetailScreen
 import com.ssintelligence.app.ui.home.HomeScreen
@@ -45,6 +47,13 @@ private object Routes {
     const val DUPLICATES = "duplicates"
     const val SETTINGS = "settings"
     const val DETAIL = "detail/{screenshotId}"
+
+    /**
+     * Debug-only route. The destination is only registered when
+     * `BuildConfig.DEBUG` is true, so a release build cannot navigate to it and
+     * the inspector's internal vocabulary is never reachable by a user (§46).
+     */
+    const val SEARCH_DEBUG = "search-debug"
 
     fun detail(id: Long) = "detail/$id"
 }
@@ -154,6 +163,12 @@ private fun MainNavigation(locator: ServiceLocator) {
             SearchScreen(
                 locator = locator,
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+                // Only wired up in debug builds; see the composable for why.
+                onOpenSearchDebug = if (BuildConfig.DEBUG) {
+                    { navController.navigate(Routes.SEARCH_DEBUG) }
+                } else {
+                    null
+                },
             )
         }
         composable(Routes.BROWSE) {
@@ -184,6 +199,15 @@ private fun MainNavigation(locator: ServiceLocator) {
                 screenshotId = id,
                 onBack = { navController.popBackStack() },
             )
+        }
+
+        if (BuildConfig.DEBUG) {
+            composable(Routes.SEARCH_DEBUG) {
+                SearchDebugScreen(
+                    locator = locator,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }

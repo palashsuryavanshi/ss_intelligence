@@ -11,6 +11,7 @@ import com.ssintelligence.app.data.database.OcrBlockEntity
 import com.ssintelligence.app.data.database.ScreenshotDao
 import com.ssintelligence.app.data.database.ScreenshotEntity
 import com.ssintelligence.app.data.database.SsIntelligenceDatabase
+import com.ssintelligence.app.data.database.toDomain
 import com.ssintelligence.app.domain.model.DiscoverResult
 import com.ssintelligence.app.domain.model.DuplicateGroup
 import com.ssintelligence.app.domain.model.ExtractedDate
@@ -38,27 +39,6 @@ class ScreenshotRepositoryImpl(
 ) : ScreenshotRepository {
 
     // ------------------------------------------------------------- mapping
-
-    private fun ScreenshotEntity.toDomain() = Screenshot(
-        id = id,
-        mediaStoreId = mediaStoreId,
-        uri = uri,
-        filename = filename,
-        relativePath = relativePath,
-        dateAdded = dateAdded,
-        dateModified = dateModified,
-        fileSize = fileSize,
-        width = width,
-        height = height,
-        mimeType = mimeType,
-        ocrText = ocrText,
-        contentHash = contentHash,
-        duplicateOfId = duplicateOfId,
-        status = runCatching { ProcessingStatus.valueOf(status) }.getOrDefault(ProcessingStatus.PENDING),
-        error = processingError,
-        createdAt = createdAt,
-        updatedAt = updatedAt,
-    )
 
     // ------------------------------------------------------------ observing
 

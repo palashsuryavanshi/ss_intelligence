@@ -6,11 +6,12 @@ import androidx.work.WorkManager
 import com.ssintelligence.app.data.database.SsIntelligenceDatabase
 import com.ssintelligence.app.data.media.MediaStoreScreenshotSource
 import com.ssintelligence.app.data.media.ScreenshotSource
+import com.ssintelligence.app.data.repository.SearchHistoryRepositoryImpl
 import com.ssintelligence.app.data.repository.ScreenshotRepositoryFactory
 import com.ssintelligence.app.data.repository.SettingsRepositoryImpl
 import com.ssintelligence.app.domain.repository.ScreenshotRepository
+import com.ssintelligence.app.domain.repository.SearchHistoryRepository
 import com.ssintelligence.app.domain.repository.SettingsRepository
-import com.ssintelligence.app.domain.search.ScreenshotSearchEngine
 import com.ssintelligence.app.duplicate.ContentHashDetector
 import com.ssintelligence.app.duplicate.ImageSimilarityDetector
 import com.ssintelligence.app.indexing.IndexingScheduler
@@ -18,7 +19,8 @@ import com.ssintelligence.app.indexing.ScreenshotProcessor
 import com.ssintelligence.app.ml.extract.MetadataExtractor
 import com.ssintelligence.app.ml.ocr.MlKitTextRecognizer
 import com.ssintelligence.app.ml.ocr.TextRecognizer
-import com.ssintelligence.app.search.FtsScreenshotSearchEngine
+import com.ssintelligence.app.search.LocalSearchEngine
+import com.ssintelligence.app.search.ScreenshotSearchEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,12 +48,16 @@ class ServiceLocator private constructor(context: Context) {
 
     val settingsRepository: SettingsRepository by lazy { SettingsRepositoryImpl(appContext) }
 
+    val searchHistoryRepository: SearchHistoryRepository by lazy {
+        SearchHistoryRepositoryImpl(database.searchHistoryDao(), settingsRepository)
+    }
+
     val screenshotSource: ScreenshotSource by lazy {
         MediaStoreScreenshotSource(appContext, Dispatchers.IO)
     }
 
     val searchEngine: ScreenshotSearchEngine by lazy {
-        FtsScreenshotSearchEngine(database.screenshotDao())
+        LocalSearchEngine(dao = database.screenshotDao(), history = searchHistoryRepository)
     }
 
     private val recognizer: TextRecognizer by lazy {

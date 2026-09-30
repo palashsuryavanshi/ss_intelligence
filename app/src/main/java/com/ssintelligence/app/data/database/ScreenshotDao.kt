@@ -27,6 +27,12 @@ data class StatusCount(
     @androidx.room.ColumnInfo(name = "cnt") val count: Int,
 )
 
+/** A host seen in indexed screenshots, with how many screenshots contain it. */
+data class HostCountRow(
+    @androidx.room.ColumnInfo(name = "host") val host: String,
+    @androidx.room.ColumnInfo(name = "cnt") val count: Int,
+)
+
 @Dao
 interface ScreenshotDao {
 
@@ -406,6 +412,139 @@ interface ScreenshotDao {
         """
     )
     fun observeFiltered(filterType: String, limit: Int): Flow<List<ScreenshotEntity>>
+
+    // ------------------------------------------------- Phase 2 structured search
+
+    /**
+     * Candidate retrieval with a full-text match, restricted by every
+     * structured filter at once (§17, §21).
+     *
+     * The result is a *bounded candidate window*, not the answer: rows are
+     * pre-ordered by a cheap filename proxy and recency, then scored by
+     * [com.ssintelligence.app.search.SearchRanker]. Ranking every screenshot in
+     * memory is what this design avoids, so the window size is a deliberate
+     * trade: a library larger than [limit] may hide a very old exact match in
+     * the pre-ordered remainder.
+     */
+    @Query(
+        """
+        SELECT s.* FROM screenshots s
+        JOIN screenshots_fts ON screenshots_fts.rowid = s.id
+        WHERE screenshots_fts MATCH :ftsQuery
+        ${SearchSql.STRUCTURED}
+        ${SearchSql.CANDIDATE_ORDER}
+        """
+    )
+    suspend fun searchByText(
+        ftsQuery: String,
+        prefixQuery: String,
+        containsQuery: String,
+        minDateSeconds: Long?,
+        maxDateSeconds: Long?,
+        priceMin: Double?,
+        priceMax: Double?,
+        priceCurrency: String?,
+        phone: String?,
+        domain: String?,
+        otp: String?,
+        filterTypes: String,
+        limit: Int,
+    ): List<ScreenshotEntity>
+
+    /**
+     * Exact-phrase candidate retrieval.
+     *
+     * Run alongside [searchByText] and unioned with it, because the phrase
+     * query is the only way to guarantee that an old but exact "Pixel 9a"
+     * screenshot reaches the ranker at all — a recency-ordered window would
+     * otherwise fill up with newer partial matches (§19).
+     */
+    @Query(
+        """
+        SELECT s.* FROM screenshots s
+        JOIN screenshots_fts ON screenshots_fts.rowid = s.id
+        WHERE screenshots_fts MATCH :ftsQuery
+        ${SearchSql.STRUCTURED}
+        ${SearchSql.CANDIDATE_ORDER}
+        """
+    )
+    suspend fun searchByPhrase(
+        ftsQuery: String,
+        prefixQuery: String,
+        containsQuery: String,
+        minDateSeconds: Long?,
+        maxDateSeconds: Long?,
+        priceMin: Double?,
+        priceMax: Double?,
+        priceCurrency: String?,
+        phone: String?,
+        domain: String?,
+        otp: String?,
+        filterTypes: String,
+        limit: Int,
+    ): List<ScreenshotEntity>
+
+    /** Structured filters with no text component: "show duplicates", "from September". */
+    @Query(
+        """
+        SELECT s.* FROM screenshots s
+        WHERE 1 = 1
+        ${SearchSql.STRUCTURED}
+        ORDER BY s.date_added DESC, s.id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun searchByFilters(
+        minDateSeconds: Long?,
+        maxDateSeconds: Long?,
+        priceMin: Double?,
+        priceMax: Double?,
+        priceCurrency: String?,
+        phone: String?,
+        domain: String?,
+        otp: String?,
+        filterTypes: String,
+        limit: Int,
+    ): List<ScreenshotEntity>
+
+    // Bounded metadata reads for the candidate window only (§17). Four indexed
+    // lookups over at most a few hundred ids; never a table-wide read.
+
+    @Query("SELECT * FROM extracted_prices WHERE screenshot_id IN (:ids)")
+    suspend fun pricesFor(ids: List<Long>): List<ExtractedPriceEntity>
+
+    @Query("SELECT * FROM extracted_urls WHERE screenshot_id IN (:ids)")
+    suspend fun urlsFor(ids: List<Long>): List<ExtractedUrlEntity>
+
+    @Query("SELECT * FROM extracted_phones WHERE screenshot_id IN (:ids)")
+    suspend fun phonesFor(ids: List<Long>): List<ExtractedPhoneEntity>
+
+    @Query("SELECT * FROM extracted_otps WHERE screenshot_id IN (:ids)")
+    suspend fun otpsFor(ids: List<Long>): List<ExtractedOtpEntity>
+
+    // ------------------------------------------------------ local suggestions
+
+    /** Indexed hosts, most frequent first, for autocomplete (§38). */
+    @Query(
+        """
+        SELECT host, COUNT(*) AS cnt FROM extracted_urls
+        GROUP BY host
+        ORDER BY cnt DESC, host ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun topHosts(limit: Int): List<HostCountRow>
+
+    /** OCR text of rows matching a prefix, used to mine local phrase suggestions. */
+    @Query(
+        """
+        SELECT s.ocr_text AS ocrText FROM screenshots s
+        JOIN screenshots_fts ON screenshots_fts.rowid = s.id
+        WHERE screenshots_fts MATCH :ftsQuery
+        LIMIT :limit
+        """
+    )
+    suspend fun ocrForPrefix(ftsQuery: String, limit: Int): List<String>
 
     // -------------------------------------------------------------- detail
 

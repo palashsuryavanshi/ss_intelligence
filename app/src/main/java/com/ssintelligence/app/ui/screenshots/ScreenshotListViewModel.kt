@@ -6,15 +6,21 @@ import androidx.lifecycle.viewModelScope
 import com.ssintelligence.app.ServiceLocator
 import com.ssintelligence.app.domain.model.SearchFilter
 import com.ssintelligence.app.domain.model.Screenshot
-import com.ssintelligence.app.domain.search.ScreenshotSearchEngine
+import com.ssintelligence.app.search.ContentType
+import com.ssintelligence.app.search.SearchRequest
+import com.ssintelligence.app.search.ScreenshotSearchEngine
+import com.ssintelligence.app.search.SortMode
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /** Browse-all screen state with an optional structural filter (§23, §26). */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ScreenshotListViewModel(
     engine: ScreenshotSearchEngine,
 ) : ViewModel() {
@@ -23,11 +29,22 @@ class ScreenshotListViewModel(
     val filter: StateFlow<SearchFilter> = filterState.asStateFlow()
 
     /**
-     * The browse list reuses the search engine with an empty query, so browse
-     * and search share one code path and one ranking implementation.
+     * The browser reuses the search engine with no query and a filter chip, so
+     * browse and search share one retrieval path and one filter implementation.
+     * With no filter and no text this is a plain recency-ordered page.
      */
     val screenshots: StateFlow<List<Screenshot>> = filterState
-        .flatMapLatest { engine.search("", it, limit = PAGE_LIMIT) }
+        .flatMapLatest { active ->
+            engine.observe(
+                SearchRequest(
+                    query = "",
+                    contentTypes = active.toContentTypes(),
+                    sortMode = SortMode.NEWEST,
+                    limit = PAGE_LIMIT,
+                ),
+            )
+        }
+        .map { it.results.map { result -> result.screenshot } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun onFilterChange(value: SearchFilter) {
@@ -48,4 +65,15 @@ class ScreenshotListViewModel(
          */
         const val PAGE_LIMIT = 300
     }
+}
+
+/** Phase 1 browse chips map onto the Phase 2 content-type filter. */
+internal fun SearchFilter.toContentTypes(): Set<ContentType> = when (this) {
+    SearchFilter.ALL -> emptySet()
+    SearchFilter.URLS -> setOf(ContentType.URLS)
+    SearchFilter.PRICES -> setOf(ContentType.PRICES)
+    SearchFilter.DATES -> setOf(ContentType.DATES)
+    SearchFilter.PHONES -> setOf(ContentType.PHONES)
+    SearchFilter.OTPS -> setOf(ContentType.OTPS)
+    SearchFilter.DUPLICATES -> setOf(ContentType.DUPLICATES)
 }

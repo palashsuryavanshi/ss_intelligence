@@ -53,10 +53,13 @@ fun SettingsScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val databaseSize by viewModel.databaseSizeBytes.collectAsStateWithLifecycle()
+    val searchHistoryEnabled by viewModel.searchHistoryEnabled.collectAsStateWithLifecycle()
+    val searchHistoryCount by viewModel.searchHistoryCount.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showClearConfirm by remember { mutableStateOf(false) }
     var showRebuildConfirm by remember { mutableStateOf(false) }
+    var showClearSearchHistory by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings") }) },
@@ -90,6 +93,15 @@ fun SettingsScreen(
 
             SettingsHeader("Privacy")
             PrivacyFacts()
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingsHeader("Search")
+            SearchHistorySection(
+                enabled = searchHistoryEnabled,
+                storedQueries = searchHistoryCount,
+                onEnabledChange = { viewModel.onSearchHistoryEnabledChange(it) },
+                onClear = { viewModel.onClearSearchHistory() },
+            )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             SettingsHeader("Storage")
@@ -154,6 +166,31 @@ fun SettingsScreen(
             },
         )
     }
+    if (showClearSearchHistory) {
+        AlertDialog(
+            onDismissRequest = { showClearSearchHistory = false },
+            title = { Text("Clear search history?") },
+            text = {
+                Text(
+                    "This deletes the $searchHistoryCount " +
+                        (if (searchHistoryCount == 1) "query" else "queries") +
+                        " stored on this device. Your screenshots and the index built from " +
+                        "them are not affected, and nothing was ever sent anywhere.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.onClearSearchHistory()
+                        showClearSearchHistory = false
+                    },
+                ) { Text("Clear") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearSearchHistory = false }) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -213,6 +250,60 @@ private fun ScopeOptions(selected: IndexingScope, onSelect: (IndexingScope) -> U
                 )
             }
         }
+    }
+}
+
+/**
+ * Search history controls (§36, §37).
+ *
+ * The switch is off by default and turning it off deletes what was stored, so
+ * "off" never means "hidden but kept". Queries that look like they carry a
+ * one-time code are never stored even when the switch is on.
+ */
+@Composable
+private fun SearchHistorySection(
+    enabled: Boolean,
+    storedQueries: Int,
+    onEnabledChange: (Boolean) -> Unit,
+    onClear: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Remember my searches", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "Off by default. Keeps the last " +
+                        "${com.ssintelligence.app.data.database.SearchHistoryDao.DEFAULT_LIMIT} " +
+                        "queries on this device only.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = enabled, onCheckedChange = onEnabledChange)
+        }
+
+        MetadataRow(
+            label = "Stored queries",
+            value = if (enabled) storedQueries.toString() else "None",
+        )
+
+        if (storedQueries > 0) {
+            TextButton(onClick = onClear) { Text("Clear search history") }
+        }
+
+        Text(
+            text = "Searches that mention a one-time code are never saved, even with this " +
+                "turned on. Suggestions and history are built only from data already on " +
+                "this device.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

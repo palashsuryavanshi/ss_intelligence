@@ -13,4 +13,14 @@ interface SettingsRepository {
 
     fun observeOnboardingDone(): Flow<Boolean>
     suspend fun setOnboardingDone(done: Boolean)
+
+    /**
+     * Whether search queries may be stored locally (§36, §37).
+     *
+     * Defaults to off. The value is intentionally not observable as a Flow:
+     * nothing in the app reacts to it changing except the recording path
+     * itself, and a one-shot read keeps the write path from having to collect.
+     */
+    suspend fun isSearchHistoryEnabled(): Boolean
+    suspend fun setSearchHistoryEnabled(enabled: Boolean)
 }

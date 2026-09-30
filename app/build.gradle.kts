@@ -78,6 +78,14 @@ android {
             isReturnDefaultValues = true
         }
     }
+
+    sourceSets {
+        getByName("androidTest") {
+            // The migration test validates the migrated schema against the
+            // exported JSON, which therefore has to be on the test device.
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
 }
 
 // Exported Room schemas make migrations reviewable and testable (§9).
@@ -131,6 +139,14 @@ dependencies {
 
     // Image loading (thumbnails from MediaStore content URIs)
     implementation(libs.coil.compose)
+
+    // Pinned explicitly. androidx.room:room-migration 2.8.4 is compiled against
+    // kotlinx-serialization 1.8.1, and Gradle's consistent resolution was
+    // otherwise settling on 1.7.3. The mismatch only surfaces as an
+    // AbstractMethodError at runtime — including during a real database
+    // migration on a user's device — so the version Room needs is the version
+    // the app gets.
+    implementation(libs.kotlinx.serialization.json)
 
     // Local JVM unit tests
     testImplementation(libs.junit)

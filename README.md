@@ -6,8 +6,17 @@ It discovers the screenshots already on your device, reads their text with on-de
 extracts structured information (links, dates, phone numbers, prices, one-time codes),
 detects exact duplicates, and makes all of it searchable — with the network switched off.
 
-Phase 1 establishes the indexing foundation. Natural-language and semantic search are
-deliberately out of scope; see [Roadmap](#roadmap).
+Search understands a sentence rather than a keyword:
+
+> Find the screenshot where I saw Pixel 9a for ₹39,999
+
+is parsed into `Pixel 9a` + `INR 39,999`, used as two independent constraints, and the
+screenshots satisfying both are ranked first. Prices, dates, domains, phone numbers and
+one-time codes are all understood in plain words. Everything runs on-device; there is no
+model, no account and no network permission.
+
+Phase 3 would add optional local semantic search. It is deliberately out of scope; the
+seam for it already exists. See [Roadmap](#roadmap).
 
 ---
 
@@ -28,7 +37,6 @@ deliberately out of scope; see [Roadmap](#roadmap).
 - [Accessibility](#accessibility)
 - [Logging](#logging)
 - [Roadmap](#roadmap)
-
 ---
 
 ## Privacy model
@@ -72,12 +80,18 @@ grep 'uses-permission android:name' \
 
 The app's remaining permissions are `READ_MEDIA_IMAGES` plus WorkManager's
 `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `RECEIVE_BOOT_COMPLETED` and `FOREGROUND_SERVICE`.
+`ACCESS_NETWORK_STATE` is worth a note: it can only *read* connectivity state, which
+WorkManager needs for its constraints, and without `INTERNET` it grants no ability to open a
+socket or send anything. Reading the state is not the same as using the network.
 
 Extracted data is treated as sensitive local data throughout:
 
 - OTP codes are **never** placed in notifications, share intents, logs, or list previews.
   They are masked in the UI until explicitly revealed.
 - OCR text, phone numbers and URLs are never logged — not even in debug builds.
+- **Search queries are treated as sensitive too.** A query is often the one string a person
+  would least want retained, so the search layer logs nothing at all, code values never reach
+  autocomplete or history, and history is off by default.
 - `AppLog` is a no-op in release builds, and R4 strips `android.util.Log` entirely.
 
 ---
@@ -133,9 +147,9 @@ adopting the newest major.
 
 ## Verified behaviour
 
-Everything below was run on an emulator (API 36) rather than assumed:
+Everything below was run on an emulator (API 36 / SDK 37) rather than assumed:
 
-- First launch → onboarding → permission → MediaStore discovery → 4 screenshots indexed
+- First launch → onboarding → permission → MediaStore discovery → 83 screenshots indexed
 - **With wifi and mobile data disabled**: discovery, OCR and extraction all completed
   (`Active default network: none`)
 - OCR text recognised; link, date and one-time-code extraction confirmed in the UI
@@ -143,7 +157,27 @@ Everything below was run on an emulator (API 36) rather than assumed:
 - A byte-identical copy of a screenshot was detected as an exact duplicate, grouped
   (2 copies, shared SHA-256 prefix) and **not** re-read — it reused the canonical OCR result
 - Settings reported index size and offered Clear index behind a confirmation dialog
-- 99 unit tests and 24 instrumented tests pass; release build succeeds under R8
+- Search understood a sentence on a real library: `prices under Rs 40000` was shown as
+  **“Searching for: up to ₹40,000”** and returned the one screenshot with an INR price at or
+  below that amount — no relaxation, no stray search terms
+- A query with no exact match showed the relaxation notice rather than silently widening
+- The debug inspector reported intent, terms, prices, candidate count, relaxation level and
+  per-result scores for the same query
+- 257 unit tests and 48 instrumented tests pass; release build succeeds under R8
+
+Five bugs were found only by running this on a device, and all are now fixed and covered by
+regression tests:
+
+1. A currency *word* between the operator and the digits (`under Rs 40000`) hid the operator,
+   so the query degraded to an exact-price search and "under" leaked into the search terms.
+2. `LIKE '%domain%'` on the full URL matched `notamazon.in` when searching for `amazon.in`.
+3. A currency *mismatch* scored as a *perfect* price match, so a `$1,299` screenshot ranked
+   top for `₹1,299`.
+4. An empty content-type selection serialized to `"|"` rather than `""`, which matched no
+   filter and hid every row — every unfiltered search returned nothing.
+5. `kotlinx-serialization` resolved to 1.7.3 while Room 2.8.4's migration code needs 1.8.1;
+   the mismatch only surfaces as an `AbstractMethodError` at runtime, including during a real
+   database migration on a user's device.
 
 ---
 
@@ -151,16 +185,21 @@ Everything below was run on an emulator (API 36) rather than assumed:
 
 ```bash
 ./gradlew testDebugUnitTest        # fast JVM tests, no device needed
-./gradlew connectedDebugAndroidTest  # Room database tests, requires a device/emulator
+./gradlew connectedDebugAndroidTest  # Room + full search engine, requires a device/emulator
 ```
 
-**99 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
-screenshot heuristics and FTS query construction. Extraction logic is deliberately free of
-Android dependencies so it is testable as plain JVM code.
+**257 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
+screenshot heuristics, FTS query construction, and the whole Phase 2 search layer: the
+query parser and each of its sub-parsers, intent classification, the ranker, snippet
+extraction and currency rendering. The search layer is deliberately free of Android
+dependencies so it is testable as plain JVM code.
 
-**24 instrumented tests** cover the database: insert, update, delete, cascade behaviour, FTS
+**48 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
 search, search ranking, filters, duplicate lookup, the pending queue, stale-work recovery,
-incremental re-indexing, keyset pagination, index rebuild and OTP isolation from search.
+incremental re-indexing, keyset pagination, index rebuild and OTP isolation from search), the
+v1→v2 schema migration, and the complete search engine against a real SQLite engine —
+keyword, phrase, price, price-operator, combined, date, URL, phone, code, duplicate, filter,
+sort and deletion cases, plus a 10,000-row performance suite.
 
 One test is worth calling out because it guards a real bug found during development:
 `searchMatchesMultipleTermsAsAnd` asserts both that multi-term search works *and* that the
@@ -314,13 +353,34 @@ stay cheap and indexable.
 | `extracted_prices` | `raw_text`, `currency`, `amount` |
 | `extracted_otps` | `code` |
 | `ocr_blocks` | `level`, `text`, box coords, `confidence` |
+| `search_history` | `query`, `created_at` (opt-in, Phase 2) |
 
 All have an indexed `screenshot_id` foreign key with `ON DELETE CASCADE`, so deleting a
 screenshot can never leave orphaned extracted rows. `extracted_prices` is additionally indexed
-on `(currency, amount)` to make queries like `currency = 'INR' AND amount >= 30000` index-driven.
+on `(currency, amount)` to make queries like `currency = 'INR' AND amount >= 30000` index-driven,
+and `extracted_phones` on `normalized` and `extracted_urls` on `host`, which is what lets a
+price, phone or domain search be a single indexed lookup rather than a scan.
 
 `extracted_otps` is deliberately **excluded from the full-text index**, so an OTP cannot be
-surfaced by typing the code into the search box.
+surfaced by typing the code into the search box. It is still *searchable* when the user types a
+code deliberately with a label — the value is matched, then discarded before it reaches the UI.
+
+`search_history` holds only the query text and a timestamp, never result ids, is capped at 25
+rows on every write, and is empty unless the user opted in. It is not indexed for search and
+is never synced anywhere.
+
+### Schema version
+
+`version = 2`, with an explicit `MIGRATION_1_2` adding `search_history`. There is deliberately
+**no destructive fallback**: silently dropping a user's index because a version changed is
+exactly the failure mode the explicit "Clear index" control exists to avoid. A migration test
+validates the migrated schema against the exported `2.json`, so a hand-written `CREATE TABLE`
+that drifts from the entity definition fails in CI rather than on a user's device.
+
+> **Implementation note.** `kotlinx-serialization-json` is pinned explicitly. Room 2.8.4's
+> migration code is compiled against 1.8.1 while Gradle's consistent resolution was choosing
+> 1.7.3; the mismatch only surfaces as an `AbstractMethodError` at runtime — including during a
+> real database migration on a user's device.
 
 ### Full-text search
 
@@ -412,42 +472,145 @@ correct after the app is killed and resumed.
 
 ## Search and ranking
 
-Phase 1 search is full-text over OCR content plus the filename, using SQLite FTS4 `MATCH`
-rather than `LIKE '%query%'` scans.
+Search is a pipeline, not a query string:
 
-Query handling is case-insensitive and whitespace-tolerant. Terms are quoted and
-prefix-matched, AND-ed, de-duplicated and capped at 10 terms so a pasted paragraph cannot
-produce a pathological query.
+```
+User Query
+    ↓  QueryParser
+SearchQuery { text terms, phrases, prices, date range, domain, phone, code, content types }
+    ↓  bounded SQL retrieval (FTS4 MATCH + EXISTS on the normalized tables)
+candidate window (≤ 400 rows)
+    ↓  SearchRanker
+ranked results, each with the reasons it matched
+```
+
+**The raw sentence never reaches SQLite.** It is parsed once into `SearchQuery`, and the
+database only ever sees derived parts: FTS terms, a price band, a date window, a host, a
+normalized number. That is what makes queries indexable and results explainable.
+
+### What the parser understands
+
+| You type | Becomes |
+|---|---|
+| `Pixel 9a` | phrase `pixel 9a` (recall terms `pixel`, `9a`) |
+| `for ₹39,999` / `Rs 40000` / `39999 rupees` | `INR 39,999` / `INR 40000` / `INR 39999` |
+| `below` `under` `less than` `up to` `<` | price ≤ amount |
+| `above` `over` `greater than` `>` | price ≥ amount |
+| `around` `approximately` `about` | price within **±5%** |
+| `between ₹10,000 and ₹20,000` | price range |
+| `from September 2026` | 1–30 Sep 2026, local midnight boundaries |
+| `yesterday`, `last week`, `last 7 days`, `last month` | local date range |
+| `amazon.in`, `https://www.amazon.in/deals` | host `amazon.in` |
+| `9876543210`, `+91 98765 43210` | `+919876543210` |
+| `OTP 483921` | code `483921` (matched, never displayed) |
+| `show duplicate screenshots` | content filter, not the word "duplicate" |
+
+Several parsers are **deliberately reluctant**, because a wrong structured filter silently
+removes the right answer:
+
+- A bare number is not a price. `Order ID: 39999` stays a number; a price needs an operator,
+  a currency marker, or an explicit word (`price`, `cost`, `for`, `at`).
+- A bare number is not a date. `20260930` needs separators, a month name, or a 19xx/20xx
+  shape **with a preposition** — so `iPhone 2026` is a model, not a year.
+- A number is not a one-time code without a label. `987654` stays a number; `OTP 987654` is a
+  code. Codes are 4–8 digits, so a 10-digit phone can never be mistaken for one.
+- Currency is normalized but **never converted**. `$1,299` does not satisfy `₹1,299`.
+- `May` is only a month with a day number or a year, because "may" is also a modal verb.
+
+Parser order is itself meaningful: date → URL → code → phone → price → content type →
+keywords. Each step claims its span of the query, so `₹39,999` becomes a price filter and
+never also a search term, and `from September` never leaves "from" behind for the price parser
+to misread.
 
 ### Ranking
 
-Deterministic and index-friendly:
+Deterministic, model-free, and configurable in one value object (`RelevanceWeights`):
 
-1. Exact filename match
-2. Filename prefix match
-3. Any other hit
-4. Ties broken by recency
+| Signal | Points |
+|---|---|
+| Exact phrase in OCR | 100 |
+| Every term present | 60 |
+| Most terms present (≥60%) | 40 |
+| Price exact / inside an "around" band | 50 |
+| Price near the band | 30 × closeness |
+| Domain (host or subdomain) | 40 |
+| Phone number (exact only) | 50 |
+| One-time code (exact only) | 50 |
+| Date window | 30 |
+| Filename hit | 20 |
+| Any OCR hit | 10 |
+| Recency | ≤ 6 |
 
-No ML model is involved, and the architecture leaves room for learned ranking later.
+Dimensions add, so a screenshot matching both the phrase and the price outranks one matching
+only the phrase. Phrase matching also checks a whitespace-stripped copy of the OCR text,
+because OCR puts a line break wherever the image had one. Ties break by recency, then by row
+id, so the order is total and never changes between runs.
 
-### Filters
+**Scores are never shown to the user.** There is no probability model behind them, so a
+"92% match" badge would be a fabrication. The UI shows the *reasons* instead — "Matched:
+Pixel 9a, ₹39,999" — and the debug inspector shows the numbers.
 
-`All`, `Links`, `Prices`, `Dates`, `Phones`, `Codes`, `Duplicates` — each a parameterized
-`EXISTS` subquery against the relevant indexed table. No string interpolation into SQL.
+### Relaxed search
+
+A query is tried at full strictness first. Only when that returns nothing is one constraint
+dropped at a time, and the rung that produced the answer is stated in plain language:
+
+| Rung | Change | What the user sees |
+|---|---|---|
+| `EXACT` | — | (nothing) |
+| `PRICE_APPROXIMATE` | exact price widens to ±5% | "No exact match. Showing prices close to what you asked for." |
+| `TEXT_ONLY` | price dropped | "No exact match. Showing screenshots matching your words." |
+| `ANY_TERM` | terms OR-ed | "Showing screenshots matching any of your words." |
+| `FILTERS_ONLY` | text dropped | "Showing screenshots that match your filters only." |
+
+Silently weakening a query would misrepresent what was asked for, so the notice is part of
+the contract rather than decoration.
+
+### Filters, sorting, history
+
+Filter chips (`All`, `Prices`, `Dates`, `Links`, `Numbers`, `Codes`, `Duplicates`) and the
+refine sheet (price range, currency, relative date, "has a code", "duplicates only") are
+single parameterized queries — no SQL is built from user input. `Relevance`, `Newest` and
+`Oldest` are all available; relevance is the default.
+
+Search history is **off by default**. Nothing is written unless the user opts in, turning it
+off deletes what was stored, and queries that look like they carry a one-time code are never
+stored even when it is on. Only the query text and a timestamp are kept — never result ids,
+so a history row cannot be used to reconstruct what was found.
+
+### Autocomplete
+
+Suggestions come only from data already on the device: recent searches, hosts seen in indexed
+screenshots, and short phrases mined from OCR text by matching the typed prefix against the
+local FTS index. The prefix never leaves the process and is never sent anywhere.
+
+### Debugging
+
+Debug builds have a **search inspector** behind a long press on the "Search" title: the raw
+query, everything the parser understood, the candidate count, the relaxation level, and each
+result's score with the reasons behind it. A release build has no click handler and no
+registered route, so it is not merely hidden — it does not exist.
 
 ### Future-proofing
 
-`ScreenshotSearchEngine` is the seam for later phases:
-
 ```kotlin
 interface ScreenshotSearchEngine {
-    fun search(query: String, filter: SearchFilter, limit: Int): Flow<List<Screenshot>>
+    suspend fun search(query: String): List<SearchResult>
+    suspend fun search(request: SearchRequest): SearchResponse
+    fun observe(request: SearchRequest): Flow<SearchResponse>
+    fun suggestions(prefix: String): Flow<List<SearchSuggestion>>
+}
+
+interface SemanticSearchProvider {
+    val isEnabled: Boolean
+    suspend fun search(query: String, candidates: List<Long>): List<Long>
 }
 ```
 
-A Phase 2 structured-query implementation or a Phase 4 semantic implementation replaces this
-interface only; no caller changes. `ScreenshotProcessor`, `ImageSimilarityDetector` and the
-extractor interfaces are similarly open for extension.
+`SemanticSearchProvider.Disabled` is the only implementation, and the fusion step that would
+consume it is already in place — semantic search is an *addition* to the deterministic engine,
+never a replacement for it. `ScreenshotProcessor`, `ImageSimilarityDetector` and the extractor
+interfaces are similarly open for extension.
 
 ---
 
@@ -479,9 +642,16 @@ which is why the interface exists rather than a concrete hash call at the call s
 
 Designed against 1,000 / 10,000 / 50,000+ screenshots:
 
-- **Keyset pagination** (`WHERE date_added < ? OR (date_added = ? AND id < ?) ORDER BY ...`),
+- **Keyset pagination** (`WHERE date_added < ? OR (date_added = ? AND id = ?) ORDER BY ...`),
   so page N costs the same as page 1. `OFFSET` is not used for browsing.
-- **Covering indexes** on every field in a filter or sort.
+- **A bounded candidate window**, not a full scan: SQL narrows the library to ≤ 400 rows and
+  only those are scored. Ranking the whole library in memory is exactly what this avoids.
+- **Exact-phrase hits are unioned into the candidate set**, so a precise but old match cannot
+  be crowded out of the window by newer partial ones.
+- **Covering indexes** on every field in a filter or sort. Date filters compare **epoch
+  seconds** — the unit of `date_added` — so converting in Kotlin rather than multiplying the
+  column in SQL is what keeps the `(date_added, id)` index usable.
+- **Domain matching is host equality or a subdomain**, not a substring match on the URL.
 - **LazyColumn** everywhere; the screenshot browser never materializes the whole collection.
 - **Downscaled thumbnails only.** Coil owns the disk and memory cache.
 - **Bounded decode concurrency** (2 at a time) with batched work units.
@@ -489,6 +659,25 @@ Designed against 1,000 / 10,000 / 50,000+ screenshots:
 - **Streams are always closed** (`use`), including on the error paths.
 - **Debounced search** (250 ms) so typing runs one query, not one per keystroke.
 - OCR geometry is line-level only, in normalized coordinates, to keep the table small.
+
+Measured on an API 37 emulator over a synthetic **10,000-row** library (the budget asserted in
+`searchStaysResponsiveOverTenThousandScreenshots` is 2 s per query):
+
+| Query | Time |
+|---|---|
+| `screenshots from last week` | 383 ms |
+| `Pixel` | 800 ms |
+| `Pixel 9a` (phrase) | 952 ms |
+| `₹39,999` | 854 ms |
+| `phones below ₹40,000` | 901 ms |
+| `Pixel 9a for ₹39,999` | 1,157 ms |
+| `screenshots from amazon.in` | 711 ms |
+
+These are emulator numbers on a debug build, and they are dominated by the FTS `MATCH` plus
+the `ORDER BY` over the matched set, not by ranking. The honest caveat: the candidate window
+means a very old exact match can be missed in a library far larger than the window, which is
+a deliberate trade for bounded memory and predictable latency. Paging (Paging 3) is the
+intended next step for that.
 
 ---
 
@@ -500,6 +689,15 @@ Designed against 1,000 / 10,000 / 50,000+ screenshots:
 - Status is always spelled out in text ("Indexed", "Queued", "Reading text", "Not indexed"),
   never conveyed by colour alone.
 - Progress bars expose a spoken progress description.
+- The search field announces what it understands ("Prices, dates, links and phone numbers in a
+  sentence are understood"), and the match chips are announced as one phrase — "Matched: Pixel
+  9a, ₹39,999" — rather than as a row of disconnected labels.
+- **Matched text in a snippet is emphasised with weight, not colour**, so it survives dark
+  mode and is never the only signal.
+- Results never show a fabricated percentage; reasons are shown instead.
+- Search state is explicit (`Idle`, `Searching`, `Results`, `NoResults`, `Error`,
+  `DatabaseUnavailable`) so the screen is never blank and never says "no results" while still
+  searching.
 - Touch targets meet Material minimums; layouts tolerate dynamic font sizes.
 - Full dark and light themes, plus Material 3 dynamic color on Android 12+.
 - No colour-only meaning, no fixed text heights that clip at large font scales.
@@ -519,26 +717,32 @@ Bad:   OCR RESULT: Your OTP is 839291
 Logs carry **identifiers and counts only**. `AppLog` no-ops in release builds, and R4 removes
 `android.util.Log` methods entirely, so sensitive values cannot leak through logs.
 
+A search query is treated as sensitive too: the search layer logs nothing at all, a failed
+search shows a fixed message rather than the underlying database error (which can contain SQL
+and file paths), and the only place a query is ever persisted is the opt-in history table.
+
 ---
 
 ## Roadmap
 
-Phase 1 deliberately stops here. Not implemented:
+Deliberately **not** implemented, in any phase:
 
-- Cloud OCR, Gemini/OpenAI/API integration, cloud database
-- Natural-language and semantic search, vector database, image embeddings
-- Automatic categorization, LLM query interpretation
-- Cross-device sync, web dashboard, online accounts
+- Cloud OCR, Gemini/OpenAI/API integration, cloud database, cloud embeddings
+- Automatic image descriptions, LLM-generated summaries, LLM query interpretation
+- Vector database, cross-device sync, web dashboard, online accounts, online backup
 - Automatic screenshot deletion
 
-Planned, and the seams already exist for them:
+The deterministic search engine is the product. AI is an *optional* addition to it, never a
+replacement, so the app stays completely functional with no model present.
 
-| Phase | Feature | Where it plugs in |
-|---|---|---|
-| 2 | Structured query search (`"Pixel 9a for ₹39,999"`) | `ScreenshotSearchEngine` |
-| 3 | Automatic categorization | new extractor stage in `ScreenshotProcessor` |
-| 4 | Local semantic search | `ScreenshotSearchEngine`, new table |
-| 5 | Merge duplicates, collections, timeline | `duplicate/` package, new tables |
+| Phase | Feature | Where it plugs in | Status |
+|---|---|---|---|
+| 1 | Local indexing, OCR, extraction, duplicates, keyword search | — | done |
+| 2 | Structured query search, ranking, relaxed fallback, suggestions | — | done |
+| 3 | Local semantic search (optional, on-device embeddings) | `SemanticSearchProvider` + the fusion step in `LocalSearchEngine` | seam ready, `Disabled` by default |
+| 4 | Automatic categorization | new extractor stage in `ScreenshotProcessor` | not started |
+| 5 | Merge duplicates, collections, timeline | `duplicate/` package, new tables | not started |
+| 6 | Paging 3 over search results | `SearchRequest.limit` → `Pager` | not started |
 
 Settings shows unimplemented toggles disabled with an explicit "planned for a later release"
 note, rather than shipping no-op controls.

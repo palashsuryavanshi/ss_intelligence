@@ -2,13 +2,17 @@ package com.ssintelligence.app.domain.usecase
 
 import com.ssintelligence.app.domain.model.IndexingProgress
 import com.ssintelligence.app.domain.model.IndexingStats
-import com.ssintelligence.app.domain.model.SearchFilter
 import com.ssintelligence.app.domain.model.Screenshot
 import com.ssintelligence.app.domain.model.ScreenshotDetail
 import com.ssintelligence.app.domain.repository.ScreenshotRepository
+import com.ssintelligence.app.domain.repository.SearchHistoryRepository
 import com.ssintelligence.app.domain.repository.SettingsRepository
-import com.ssintelligence.app.domain.search.ScreenshotSearchEngine
 import com.ssintelligence.app.indexing.IndexingScheduler
+import com.ssintelligence.app.search.SearchQuery
+import com.ssintelligence.app.search.SearchRequest
+import com.ssintelligence.app.search.SearchResponse
+import com.ssintelligence.app.search.SearchSuggestion
+import com.ssintelligence.app.search.ScreenshotSearchEngine
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -57,16 +61,62 @@ class BrowseScreenshotsUseCase(
 }
 
 /**
- * Full-text search with filters (§25, §26).
+ * Structured search with filters (§2, §25).
  *
  * Keystroke debouncing is a UI concern and lives in the ViewModel, so this use
- * case stays a thin, directly testable mapping from (query, filter) to results.
+ * case stays a thin, directly testable mapping from a [SearchRequest] to a
+ * [SearchResponse].
  */
 class SearchScreenshotsUseCase(
     private val engine: ScreenshotSearchEngine,
 ) {
-    operator fun invoke(query: String, filter: SearchFilter): Flow<List<Screenshot>> =
-        engine.search(query, filter)
+    operator fun invoke(request: SearchRequest): Flow<SearchResponse> = engine.observe(request)
+}
+
+/**
+ * Understands a query without running it (§25).
+ *
+ * Used to show "Searching for Pixel 9a · ₹39,999" above the results, so the
+ * user can see what the engine understood before the results arrive.
+ */
+class ParseSearchQueryUseCase(
+    private val engine: ScreenshotSearchEngine,
+) {
+    suspend operator fun invoke(query: String): SearchQuery = engine.parse(query)
+}
+
+/** Local autocomplete from recent searches, indexed hosts and OCR phrases (§38). */
+class ObserveSearchSuggestionsUseCase(
+    private val engine: ScreenshotSearchEngine,
+) {
+    operator fun invoke(prefix: String): Flow<List<SearchSuggestion>> = engine.suggestions(prefix)
+}
+
+/** Recent searches, empty unless the user opted in (§24, §37). */
+class ObserveRecentSearchesUseCase(
+    private val history: SearchHistoryRepository,
+) {
+    operator fun invoke(limit: Int = SearchHistoryRepository.DEFAULT_LIMIT): Flow<List<String>> =
+        history.observeRecent(limit)
+}
+
+/**
+ * Records a submitted query in the local history.
+ *
+ * Skips anything that looks like it carries a one-time code, and does nothing
+ * at all unless history is enabled — see [SearchHistoryRepository].
+ */
+class RecordSearchUseCase(
+    private val history: SearchHistoryRepository,
+) {
+    suspend operator fun invoke(query: String) = history.record(query)
+}
+
+/** "Clear search history" in Settings (§36). */
+class ClearSearchHistoryUseCase(
+    private val history: SearchHistoryRepository,
+) {
+    suspend operator fun invoke() = history.clear()
 }
 
 /** Detail data for one screenshot (§24). */

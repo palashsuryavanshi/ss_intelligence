@@ -30,6 +30,19 @@ class SettingsViewModel(
     private val _databaseSizeBytes = MutableStateFlow(0L)
     val databaseSizeBytes: StateFlow<Long> = _databaseSizeBytes
 
+    /**
+     * Search history state.
+     *
+     * `enabled` is read back after every write so the switch cannot drift out of
+     * sync with what is actually stored, and `count` is the number of queries
+     * currently on the device.
+     */
+    private val _searchHistoryEnabled = MutableStateFlow(false)
+    val searchHistoryEnabled: StateFlow<Boolean> = _searchHistoryEnabled
+
+    private val _searchHistoryCount = MutableStateFlow(0)
+    val searchHistoryCount: StateFlow<Int> = _searchHistoryCount
+
     val uiState: StateFlow<SettingsUiState> = combine(
         settings.observeTheme(),
         settings.observeScope(),
@@ -47,6 +60,40 @@ class SettingsViewModel(
 
     init {
         refreshDatabaseSize()
+        refreshSearchHistory()
+    }
+
+    /**
+     * Opting out also deletes what was already stored.
+     *
+     * Leaving the switch off while old queries sit on disk would make "off"
+     * mean nothing, which is the opposite of what the label promises.
+     */
+    fun onSearchHistoryEnabledChange(enabled: Boolean) {
+        viewModelScope.launch {
+            settings.setSearchHistoryEnabled(enabled)
+            if (!enabled) locator.searchHistoryRepository.clear()
+            _searchHistoryEnabled.value = enabled
+            refreshSearchHistoryCount()
+        }
+    }
+
+    fun onClearSearchHistory() {
+        viewModelScope.launch {
+            locator.searchHistoryRepository.clear()
+            refreshSearchHistoryCount()
+        }
+    }
+
+    fun refreshSearchHistory() {
+        viewModelScope.launch {
+            _searchHistoryEnabled.value = settings.isSearchHistoryEnabled()
+            refreshSearchHistoryCount()
+        }
+    }
+
+    private suspend fun refreshSearchHistoryCount() {
+        _searchHistoryCount.value = locator.searchHistoryRepository.count()
     }
 
     fun onThemeChange(mode: ThemeMode) {
