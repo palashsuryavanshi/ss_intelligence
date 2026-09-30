@@ -1,0 +1,24 @@
+# Android / Gradle
+*.iml
+.gradle/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+local/
+local.properties
+
+# The Gradle wrapper IS committed so anyone can build without installing Gradle.
+
+# IDE
+.idea/
+.DS_Store
+*.swp
+Thumbs.db
+
+# Secrets — never commit signing material
+*.keystore
+*.jks
+keystore.properties
+google-services.json
+.env

@@ -1,0 +1,17 @@
+# Build artifacts
+build/
+.gradle/
+*.apk
+*.aab
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+
+# Signing material — never commit these
+*.jks
+*.keystore
+keystore.properties
+
+# Gradle wrapper is intentionally committed so the project builds anywhere.

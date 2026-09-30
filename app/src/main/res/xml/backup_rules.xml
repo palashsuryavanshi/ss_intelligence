@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules: the screenshot index (Room DB) may be excluded from cloud
+  backup because it contains sensitive OCR text. Rebuilding the index locally
+  is always possible. Preferences are small and safe to back up.
+-->
+<full-backup-content>
+    <exclude domain="database" path="ss_intelligence.db" />
+    <exclude domain="database" path="ss_intelligence.db-shm" />
+    <exclude domain="database" path="ss_intelligence.db-wal" />
+</full-backup-content>
