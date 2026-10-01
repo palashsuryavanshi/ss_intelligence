@@ -33,8 +33,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SearchHistoryEntity::class,
         ScreenshotEmbeddingEntity::class,
         ScreenshotCategoryEntity::class,
+        ScreenshotVisualEntity::class,
+        GraphEntityRow::class,
+        GraphRelationRow::class,
+        CollectionRow::class,
+        CollectionMemberRow::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class SsIntelligenceDatabase : RoomDatabase() {
@@ -44,6 +49,12 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
     abstract fun searchHistoryDao(): SearchHistoryDao
 
     abstract fun semanticDao(): SemanticDao
+
+    abstract fun visualDao(): VisualDao
+
+    abstract fun graphDao(): GraphDao
+
+    abstract fun collectionDao(): CollectionDao
 
     companion object {
         const val NAME = "ss_intelligence.db"
@@ -132,9 +143,120 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v3 → v4 adds visuals, the knowledge graph and collections.
+         *
+         * All derived data again: visuals recompute from pixels, the graph
+         * rebuilds from extraction tables, collections are user data carried
+         * over untouched (empty on upgrade by definition).
+         */
+        val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `screenshot_visuals` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `dhash` INTEGER NOT NULL,
+                        `colors` TEXT NOT NULL,
+                        `brightness` REAL NOT NULL,
+                        `is_dark` INTEGER NOT NULL,
+                        `text_coverage` REAL NOT NULL,
+                        `shot_type` TEXT NOT NULL,
+                        `layout` TEXT NOT NULL,
+                        `model_version` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_screenshot_visuals_screenshot_id` " +
+                        "ON `screenshot_visuals` (`screenshot_id`)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `graph_entities` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `display_name` TEXT NOT NULL,
+                        `normalized_name` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_graph_entities_type_normalized_name` " +
+                        "ON `graph_entities` (`type`, `normalized_name`)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `graph_relations` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `entity_id` INTEGER NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `confidence` REAL NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`entity_id`) REFERENCES `graph_entities`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_graph_relations_screenshot_id` " +
+                        "ON `graph_relations` (`screenshot_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_graph_relations_entity_id` " +
+                        "ON `graph_relations` (`entity_id`)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `collections` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `collection_members` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `collection_id` INTEGER NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `added_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`collection_id`) REFERENCES `collections`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_collection_members_collection_id` " +
+                        "ON `collection_members` (`collection_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_collection_members_screenshot_id` " +
+                        "ON `collection_members` (`screenshot_id`)",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "`index_collection_members_collection_id_screenshot_id` " +
+                        "ON `collection_members` (`collection_id`, `screenshot_id`)",
+                )
+            }
+        }
+
         fun build(context: Context): SsIntelligenceDatabase =
             Room.databaseBuilder(context.applicationContext, SsIntelligenceDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 // No destructive fallback: losing an index silently would be
                 // worse than a visible error. "Clear Index" in Settings is the
                 // explicit recovery path.

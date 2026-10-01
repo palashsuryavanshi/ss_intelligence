@@ -75,9 +75,15 @@ class LocalSearchEngineInstrumentedTest {
         phone: String? = null,
         otp: String? = null,
         duplicateOf: Long? = null,
+        /**
+         * Absolute epoch seconds, overriding [daysAgo]. Calendar-bounded tests
+         * need it: "3 days ago" lands in the previous month on the 1st, 2nd or
+         * 3rd of a month, which would make those tests fail by date alone.
+         */
+        addedAt: Long? = null,
     ): Long {
         val dao = database.screenshotDao()
-        val added = nowSeconds() - daysAgo * 86_400
+        val added = addedAt ?: (nowSeconds() - daysAgo * 86_400)
         val id = dao.insertIgnoring(
             listOf(
                 ScreenshotEntity(
@@ -243,7 +249,11 @@ class LocalSearchEngineInstrumentedTest {
     @Test
     fun monthFilterUsesLocalCalendarBoundaries() = runBlocking {
         val now = LocalDateTime.now().atZone(ZoneId.systemDefault())
-        val inMonth = seedScreenshot("Receipt", "in.png", daysAgo = 3)
+        // Seeded at the 1st of the current month rather than "3 days ago": the
+        // test must exercise the month boundary, not the current day-of-month.
+        val firstOfMonth = now.withDayOfMonth(1).toLocalDate().atTime(12, 0)
+            .atZone(ZoneId.systemDefault()).toInstant().epochSecond
+        val inMonth = seedScreenshot("Receipt", "in.png", addedAt = firstOfMonth)
         seedScreenshot("Receipt", "ancient.png", daysAgo = 400)
 
         val results = engine().search("screenshots from ${now.month.name.lowercase().replaceFirstChar { it.uppercase() }}")

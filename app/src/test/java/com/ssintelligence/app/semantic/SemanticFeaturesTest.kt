@@ -207,6 +207,44 @@ class EntityExtractorTest {
         )
         assertTrue(entities.none { it.kind == EntityKind.ORDER_NUMBER })
     }
+
+    @Test
+    fun `a lowercase word after an order keyword is a label, not a code`() {
+        // Found on a real library: a global (?i) flag let the code class match
+        // lowercase text, filing an ORDER named "Protection" on four
+        // screenshots, which surfaced as a fabricated Timeline "event".
+        val entities = EntityExtractor.extract(
+            ScreenshotDocument(1, "order Protection parameters details", "s.png"),
+        )
+        assertTrue(
+            "no order entities expected, got " +
+                entities.filter { it.kind == EntityKind.ORDER_NUMBER }.map { it.label },
+            entities.none { it.kind == EntityKind.ORDER_NUMBER },
+        )
+    }
+
+    @Test
+    fun `an uppercase label without a digit is still not a code`() {
+        val entities = EntityExtractor.extract(
+            ScreenshotDocument(1, "Order CONFIRMATION pending", "s.png"),
+        )
+        assertTrue(entities.none { it.kind == EntityKind.ORDER_NUMBER })
+    }
+
+    @Test
+    fun `a lowercase code is not recognized because real codes are uppercase`() {
+        // Being conservative here is deliberate: a missing event is a smaller
+        // error than an invented one, and PNR/order codes are uppercase in
+        // every real screenshot format.
+        val entities = EntityExtractor.extract(
+            ScreenshotDocument(1, "PNR ab12cd confirmed", "s.png"),
+        )
+        assertTrue(entities.none { it.kind == EntityKind.BOOKING_NUMBER })
+        val uppercase = EntityExtractor.extract(
+            ScreenshotDocument(1, "PNR AB12CD confirmed", "s.png"),
+        )
+        assertTrue(uppercase.any { it.kind == EntityKind.BOOKING_NUMBER })
+    }
 }
 
 class SensitiveContentDetectorTest {

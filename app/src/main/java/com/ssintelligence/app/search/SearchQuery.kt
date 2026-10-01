@@ -37,12 +37,23 @@ data class SearchQuery(
     val contentTypes: Set<ContentType> = emptySet(),
     val timeRange: TimeRange? = null,
     val sortMode: SortMode = SortMode.RELEVANCE,
+    /**
+     * Palette colors named in the query (§9 Phase 4).
+     *
+     * Lowercase color names (`blue`, `dark`) matched against the screenshot's
+     * extracted palette — what the image is mostly made of, never what any
+     * object in it is. "Dark" matches dark-mode screenshots and night scenes.
+     */
+    val colors: List<String> = emptyList(),
+    /** True for "long screenshots" / "tall screenshots" (§25 Phase 4). */
+    val longScreenshotsOnly: Boolean = false,
 ) {
     /** True when nothing in the query narrows the result set. */
     val isEmpty: Boolean
         get() = textTerms.isEmpty() && prices.isEmpty() && dateFilters.isEmpty() &&
             urls.isEmpty() && phoneNumbers.isEmpty() && otpCodes.isEmpty() &&
-            contentTypes.isEmpty() && timeRange == null
+            contentTypes.isEmpty() && timeRange == null && colors.isEmpty() &&
+            !longScreenshotsOnly
 
     /** Terms plus phrase words — everything the FTS index should see. */
     val ftsTerms: List<String>
@@ -65,6 +76,8 @@ data class SearchQuery(
             addAll(dateFilters.map { it.label })
             addAll(urls)
             addAll(phoneNumbers)
+            addAll(colors)
+            if (longScreenshotsOnly) add("long screenshots")
             if (otpCodes.isNotEmpty()) add("one-time code")
             if (ContentType.DUPLICATES in contentTypes) add("duplicates")
         }

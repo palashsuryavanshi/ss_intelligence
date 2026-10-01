@@ -59,6 +59,9 @@ fun SettingsScreen(
     val embeddedCount by viewModel.embeddedCount.collectAsStateWithLifecycle()
     val completedCount by viewModel.completedCount.collectAsStateWithLifecycle()
     val rebuildProgress by viewModel.semanticRebuildProgress.collectAsStateWithLifecycle()
+    val processingMode by viewModel.processingMode.collectAsStateWithLifecycle()
+    val storage by viewModel.storage.collectAsStateWithLifecycle()
+    val visualProgress by viewModel.visualRebuildProgress.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -128,6 +131,27 @@ fun SettingsScreen(
                 storedQueries = searchHistoryCount,
                 semanticEnabled = semanticEnabled,
             )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingsHeader("Intelligence processing")
+            ProcessingModeOptions(
+                selected = processingMode,
+                onSelect = viewModel::onProcessingModeChange,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingsHeader("Visual intelligence")
+            VisualIntelligenceSection(
+                visualProgress = visualProgress,
+                onRebuild = viewModel::onBuildVisualIndex,
+                onClearVisuals = viewModel::onClearVisualIndex,
+                onClearCategories = viewModel::onClearAutoCategories,
+                onClearGraph = viewModel::onClearGraph,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingsHeader("Storage usage")
+            StorageSection(storage = storage)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             SettingsHeader("Storage")
@@ -471,6 +495,210 @@ private fun PrivacyDashboard(
 }
 
 /**
+ * Background processing policy (§62).
+ *
+ * Only governs expensive background embedding. Browsing and search work
+ * identically in every mode.
+ */
+@Composable
+private fun ProcessingModeOptions(
+    selected: com.ssintelligence.app.domain.repository.ProcessingMode,
+    onSelect: (com.ssintelligence.app.domain.repository.ProcessingMode) -> Unit,
+) {
+    Column {
+        com.ssintelligence.app.domain.repository.ProcessingMode.entries.forEach { mode ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = mode == selected,
+                    onClick = { onSelect(mode) },
+                )
+                Column(Modifier.padding(start = 4.dp)) {
+                    Text(
+                        text = mode.label,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = when (mode) {
+                            com.ssintelligence.app.domain.repository.ProcessingMode.AUTOMATIC ->
+                                "Catch-up work runs whenever"
+
+                            com.ssintelligence.app.domain.repository.ProcessingMode.CHARGING_ONLY ->
+                                "Catch-up work waits for charging"
+
+                            com.ssintelligence.app.domain.repository.ProcessingMode.MANUAL ->
+                                "Only explicit taps run the builders"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Visual index controls (§43).
+ *
+ * No model to install or remove: visual analysis is built in like the text
+ * index. What can be managed is the derived data — rebuild it, or delete
+ * pieces of it independently (§64). Deleting never touches screenshots, OCR
+ * text, or extracted information.
+ */
+@Composable
+private fun VisualIntelligenceSection(
+    visualProgress: Int,
+    onRebuild: () -> Unit,
+    onClearVisuals: () -> Unit,
+    onClearCategories: () -> Unit,
+    onClearGraph: () -> Unit,
+) {
+    var showClearVisuals by remember { mutableStateOf(false) }
+    var showClearCategories by remember { mutableStateOf(false) }
+    var showClearGraph by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        MetadataRow("Visual model", "built-in perceptual hash + rules")
+        MetadataRow("Model size", "no download needed")
+        if (visualProgress > 0) {
+            Text(
+                text = "Analyzing images… $visualProgress done",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        TextButton(onClick = onRebuild) { Text("Build visual index") }
+        TextButton(onClick = { showClearVisuals = true }) { Text("Delete image embeddings") }
+        TextButton(onClick = { showClearCategories = true }) { Text("Delete automatic categories") }
+        TextButton(onClick = { showClearGraph = true }) { Text("Delete knowledge graph") }
+
+        Text(
+            text = "Visual analysis, automatic categories and the knowledge graph are all " +
+                "derived from the extracted data already on this device, so \"Build visual " +
+                "index\" refills any of them at any time. User collections and category " +
+                "corrections are never deleted by the actions below — only derived data goes, " +
+                "and screenshots, text and search keep working regardless.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    if (showClearVisuals) {
+        ConfirmDelete(
+            title = "Delete image embeddings?",
+            message = "Visual similarity and palette search stop working until the index " +
+                "is rebuilt. Screenshots, text and text search are unaffected.",
+            onDismiss = { showClearVisuals = false },
+            onConfirm = {
+                onClearVisuals()
+                showClearVisuals = false
+            },
+        )
+    }
+    if (showClearCategories) {
+        ConfirmDelete(
+            title = "Delete automatic categories?",
+            message = "Classifier-assigned categories are removed. Categories you chose " +
+                "yourself stay.",
+            onDismiss = { showClearCategories = false },
+            onConfirm = {
+                onClearCategories()
+                showClearCategories = false
+            },
+        )
+    }
+    if (showClearGraph) {
+        ConfirmDelete(
+            title = "Delete knowledge graph?",
+            message = "Entities and relationships are removed. Entity pages and " +
+                "entity search stop working until \"Build visual index\" refills them " +
+                "from the extracted data already on this device.",
+            onDismiss = { showClearGraph = false },
+            onConfirm = {
+                onClearGraph()
+                showClearGraph = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun ConfirmDelete(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Delete") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Measured storage breakdown (§63).
+ *
+ * Every row is page accounting from the database itself — except models, which
+ * cost zero bytes because they are built in. When accounting fails the section
+ * says so instead of guessing.
+ */
+@Composable
+private fun StorageSection(storage: com.ssintelligence.app.domain.repository.StorageBreakdown?) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (storage == null) {
+            Text(
+                text = "Measuring…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return
+        }
+        if (!storage.measured) {
+            Text(
+                text = "Per-component accounting is unavailable on this device. " +
+                    "Total database size is shown under Storage above.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return
+        }
+        MetadataRow("Screenshots + extracted data", formatBytes(storage.screenshotsBytes))
+        MetadataRow("Text search index", formatBytes(storage.ocrIndexBytes))
+        MetadataRow("Text vectors", formatBytes(storage.textVectorBytes))
+        MetadataRow("Image data", formatBytes(storage.imageVectorBytes))
+        MetadataRow("Knowledge graph + categories", formatBytes(storage.graphBytes))
+        MetadataRow("Search history", formatBytes(storage.historyBytes))
+        MetadataRow("Models", "built in (0 B)")
+        MetadataRow("Database total", formatBytes(storage.databaseBytes))
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val units = listOf("KB", "MB", "GB")
+    var value = bytes.toDouble() / 1024
+    var unitIndex = 0
+    while (value >= 1024 && unitIndex < units.lastIndex) {
+        value /= 1024
+        unitIndex++
+    }
+    return String.format(java.util.Locale.getDefault(), "%.1f %s", value, units[unitIndex])
+}
+
+/**
  * Facts about the privacy model, stated in the product itself rather than only
  * in a README (§2, §29).
  */
@@ -501,16 +729,21 @@ private fun FactRow(text: String) {
 }
 
 /**
- * Settings that Phase 1 deliberately does not implement (§21, §34). They are
- * shown disabled with an explanation rather than omitted, so the roadmap is
- * visible and no control is a no-op surprise.
+ * Settings that are still not implemented. They are shown disabled with an
+ * explanation rather than omitted, so the roadmap is visible and no control is a
+ * no-op surprise.
+ *
+ * Three Phase 1 placeholders left this list as their phases landed: background
+ * processing is now the `Processing mode` radio group above, and near-duplicate
+ * detection is the Similar section on the Duplicates screen. Shipping a
+ * disabled switch for a feature that now exists would be a lie in the other
+ * direction, so they are gone rather than greyed out.
  */
 @Composable
 private fun DeferredSettings() {
     Column(Modifier.padding(top = 8.dp)) {
-        DeferredRow("Index automatically in the background")
-        DeferredRow("Only process while charging")
-        DeferredRow("Near-duplicate detection")
+        DeferredRow("Automatic screenshot deletion")
+        DeferredRow("Face grouping in photos")
     }
 }
 

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.ssintelligence.app.domain.model.IndexingScope
 import com.ssintelligence.app.domain.model.ThemeMode
+import com.ssintelligence.app.domain.repository.ProcessingMode
 import com.ssintelligence.app.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -68,11 +69,25 @@ class SettingsRepositoryImpl(
         store.edit { it[SEMANTIC_SEARCH_ENABLED] = enabled }
     }
 
+    override suspend fun processingMode(): ProcessingMode {
+        var mode = ProcessingMode.AUTOMATIC
+        store.edit { prefs ->
+            mode = prefs[PROCESSING_MODE]?.let { runCatching { ProcessingMode.valueOf(it) }.getOrNull() }
+                ?: ProcessingMode.AUTOMATIC
+        }
+        return mode
+    }
+
+    override suspend fun setProcessingMode(mode: ProcessingMode) {
+        store.edit { it[PROCESSING_MODE] = mode.name }
+    }
+
     private companion object {
         val THEME = stringPreferencesKey("theme_mode")
         val SCOPE = stringPreferencesKey("indexing_scope")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_complete")
         val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")
         val SEMANTIC_SEARCH_ENABLED = booleanPreferencesKey("semantic_search_enabled")
+        val PROCESSING_MODE = stringPreferencesKey("processing_mode")
     }
 }

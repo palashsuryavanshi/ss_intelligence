@@ -143,6 +143,11 @@ data class ProcessingResult(
     val contentHash: String,
     /** Non-null when this image exactly matches an already-indexed screenshot. */
     val duplicateOfId: Long?,
+    /**
+     * Visual analysis, when the analyzer ran. Null when visual analysis is
+     * disabled or failed — never fatal to the screenshot (§47 Phase 4).
+     */
+    val visual: com.ssintelligence.app.vision.VisualAnalysis? = null,
 )
 
 /** Structured OCR output preserved for future visual search (§12). */

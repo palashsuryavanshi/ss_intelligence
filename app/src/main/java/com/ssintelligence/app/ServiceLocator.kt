@@ -15,6 +15,8 @@ import com.ssintelligence.app.domain.repository.SearchHistoryRepository
 import com.ssintelligence.app.domain.repository.SettingsRepository
 import com.ssintelligence.app.duplicate.ContentHashDetector
 import com.ssintelligence.app.duplicate.ImageSimilarityDetector
+import com.ssintelligence.app.graph.GraphRepository
+import com.ssintelligence.app.graph.GraphRepositoryImpl
 import com.ssintelligence.app.indexing.IndexingScheduler
 import com.ssintelligence.app.indexing.ScreenshotProcessor
 import com.ssintelligence.app.ml.extract.MetadataExtractor
@@ -24,9 +26,11 @@ import com.ssintelligence.app.search.LocalSearchEngine
 import com.ssintelligence.app.search.ScreenshotSearchEngine
 import com.ssintelligence.app.semantic.HashedNgramEmbeddingProvider
 import com.ssintelligence.app.semantic.SemanticRepository
+import com.ssintelligence.app.vision.BitmapVisualAnalyzer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Manual dependency container.
@@ -62,12 +66,22 @@ class ServiceLocator private constructor(context: Context) {
         MediaStoreScreenshotSource(appContext, Dispatchers.IO)
     }
 
+    val visualAnalyzer: BitmapVisualAnalyzer by lazy {
+        BitmapVisualAnalyzer(appContext.contentResolver, Dispatchers.IO)
+    }
+
+    val graphRepository: GraphRepository by lazy {
+        GraphRepositoryImpl(database.graphDao(), database.screenshotDao(), database.semanticDao())
+    }
+
     val searchEngine: ScreenshotSearchEngine by lazy {
         LocalSearchEngine(
             dao = database.screenshotDao(),
             history = searchHistoryRepository,
             semanticRepository = semanticRepository,
             semanticSettings = settingsRepository,
+            visualDao = database.visualDao(),
+            graphRepository = graphRepository,
         )
     }
 
@@ -90,6 +104,8 @@ class ServiceLocator private constructor(context: Context) {
             // semantic index on save, and the semantic index reads the database.
             (screenshotRepository as? com.ssintelligence.app.data.repository.ScreenshotRepositoryImpl)
                 ?.semanticRepository = semantic
+            (screenshotRepository as? com.ssintelligence.app.data.repository.ScreenshotRepositoryImpl)
+                ?.graphRepository = graphRepository
         }
     }
 
@@ -108,6 +124,7 @@ class ServiceLocator private constructor(context: Context) {
             similarityDetector = similarityDetector,
             metadataExtractor = MetadataExtractor(),
             processingDispatcher = Dispatchers.Default,
+            visualAnalyzer = visualAnalyzer,
         )
     }
 
@@ -115,6 +132,24 @@ class ServiceLocator private constructor(context: Context) {
 
     val indexingScheduler: IndexingScheduler by lazy {
         IndexingScheduler(appContext, workManager)
+    }
+
+    /**
+     * One-shot intelligence catch-up after launch (§39, §62).
+     *
+     * Reads the processing mode once and enqueues the semantic and visual
+     * backfills accordingly — or not at all in Manual mode. KEEP policy means
+     * repeated launches never stack duplicate work.
+     */
+    fun requestIntelligenceCatchUp() {
+        applicationScope.launch {
+            val mode = runCatching { settingsRepository.processingMode() }
+                .getOrDefault(
+                    com.ssintelligence.app.domain.repository.ProcessingMode.AUTOMATIC,
+                )
+            com.ssintelligence.app.indexing.SemanticIndexWorker.requestCatchUp(appContext, mode)
+            com.ssintelligence.app.indexing.VisualIndexWorker.requestCatchUp(appContext, mode)
+        }
     }
 
     companion object {

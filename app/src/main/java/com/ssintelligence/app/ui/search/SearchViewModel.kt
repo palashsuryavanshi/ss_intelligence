@@ -64,6 +64,16 @@ class SearchViewModel(
     private val manualFilters = MutableStateFlow(ManualFilters())
     private val sortMode = MutableStateFlow(SortMode.RELEVANCE)
 
+    /**
+     * Search-by-image target (§7).
+     *
+     * Set from the image picker; cleared by typing (a sentence replaces the
+     * picture) or explicitly. Combined with the text query when both are
+     * present — that combination is the multimodal search.
+     */
+    private val visualQueryId = MutableStateFlow<Long?>(null)
+    val visualQuery: StateFlow<Long?> = visualQueryId.asStateFlow()
+
     val query: StateFlow<String> = queryText.asStateFlow()
     val filters: StateFlow<Set<ContentType>> = contentTypes.asStateFlow()
     val manual: StateFlow<ManualFilters> = manualFilters.asStateFlow()
@@ -101,12 +111,14 @@ class SearchViewModel(
         contentTypes,
         manualFilters,
         sortMode,
-    ) { text, types, manual, sort ->
+        visualQueryId,
+    ) { text, types, manual, sort, visualId ->
         SearchRequest(
             query = text,
             contentTypes = types,
             manualFilters = manual,
             sortMode = sort,
+            visualQueryId = visualId,
         )
     }
 
@@ -115,7 +127,12 @@ class SearchViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchUiState.Idle)
 
     private fun runSearch(req: SearchRequest) = flow<SearchUiState> {
+        // A pinned image is input on its own. Found on the device: the pin row
+        // rendered correctly while the screen stayed on the idle prompt, because
+        // this guard only looked at the text box and short-circuited before the
+        // engine ever saw the visual query.
         val hasInput = req.query.isNotBlank() ||
+            req.visualQueryId != null ||
             !req.manualFilters.isEmpty ||
             req.contentTypes.isNotEmpty()
         if (!hasInput) {
@@ -138,6 +155,17 @@ class SearchViewModel(
 
     fun onQueryChange(value: String) {
         queryText.value = value
+    }
+
+    /**
+     * Pins or unpins the search-by-image target.
+     *
+     * Text and image combine when both are present — that combination is the
+     * multimodal search — so typing never clears the pin. The pin has its own
+     * explicit remove action instead.
+     */
+    fun onVisualQueryChange(id: Long?) {
+        visualQueryId.value = id
     }
 
     /** IME "Search": also records the query in local history, when enabled. */

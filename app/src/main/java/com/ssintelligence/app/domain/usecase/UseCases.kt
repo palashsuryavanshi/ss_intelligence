@@ -196,6 +196,83 @@ class ObserveSmartGroupsUseCase(
         repository.smartGroups()
 }
 
+// ---------------------------------------------------------- Phase 4 organize
+
+/** Visually similar screenshots by perceptual hash (§6). */
+class FindVisuallySimilarUseCase(
+    private val repository: ScreenshotRepository,
+) {
+    suspend operator fun invoke(
+        screenshotId: Long,
+        limit: Int = 8,
+    ): List<com.ssintelligence.app.domain.repository.VisualSimilar> =
+        repository.visuallySimilar(screenshotId, limit)
+}
+
+/** Search-by-image: rank the library by visual similarity to one shot (§7). */
+class SearchByImageUseCase(
+    private val engine: ScreenshotSearchEngine,
+) {
+    suspend operator fun invoke(
+        screenshotId: Long,
+        query: String = "",
+        limit: Int = 60,
+    ): com.ssintelligence.app.search.SearchResponse =
+        engine.search(
+            com.ssintelligence.app.search.SearchRequest(
+                query = query,
+                visualQueryId = screenshotId,
+                limit = limit,
+            ),
+        )
+}
+
+/** "More from this website", from actual indexed hosts (§32). */
+class MoreFromWebsiteUseCase(
+    private val engine: ScreenshotSearchEngine,
+) {
+    suspend operator fun invoke(domain: String): com.ssintelligence.app.search.SearchResponse =
+        engine.search(
+            com.ssintelligence.app.search.SearchRequest(
+                query = domain,
+                limit = 60,
+            ),
+        )
+}
+
+/** "More screenshots about X", resolved through the entity graph (§33). */
+class MoreAboutEntityUseCase(
+    private val repository: ScreenshotRepository,
+) {
+    suspend operator fun invoke(entityId: Long, limit: Int = 60): List<Screenshot> {
+        val ids = repository.screenshotIdsForEntity(entityId, limit)
+        if (ids.isEmpty()) return emptyList()
+        return ids.mapNotNull { repository.getById(it) }
+    }
+}
+
+/** OCR/metadata comparison of two screenshots (§26). */
+class CompareScreenshotsUseCase(
+    private val repository: ScreenshotRepository,
+) {
+    suspend operator fun invoke(
+        firstId: Long,
+        secondId: Long,
+    ): com.ssintelligence.app.compare.ScreenshotComparison? {
+        val first = repository.getDetail(firstId) ?: return null
+        val second = repository.getDetail(secondId) ?: return null
+        return com.ssintelligence.app.compare.CompareBuilder.compare(first, second)
+    }
+}
+
+/** Near-duplicate groups for the Similar screen (§29). */
+class ObserveNearDuplicatesUseCase(
+    private val repository: ScreenshotRepository,
+) {
+    suspend operator fun invoke(limit: Int = 60): List<com.ssintelligence.app.domain.repository.NearDuplicateGroup> =
+        repository.nearDuplicateGroups(limit)
+}
+
 
 /** Detail data for one screenshot (§24). */
 class GetScreenshotDetailUseCase(

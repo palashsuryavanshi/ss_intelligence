@@ -170,6 +170,10 @@ interface SemanticDao {
     @Query("SELECT * FROM screenshot_categories WHERE screenshot_id = :screenshotId ORDER BY confidence DESC")
     suspend fun categoriesFor(screenshotId: Long): List<ScreenshotCategoryEntity>
 
+    /** Batch category read for timeline and group screens — one query, not N. */
+    @Query("SELECT * FROM screenshot_categories WHERE screenshot_id IN (:ids)")
+    suspend fun categoriesForIds(ids: List<Long>): List<ScreenshotCategoryEntity>
+
     /** User rows win: a single category list with overrides applied. */
     @Query(
         """

@@ -7,8 +7,11 @@ import com.ssintelligence.app.ServiceLocator
 import com.ssintelligence.app.domain.model.IndexingScope
 import com.ssintelligence.app.domain.model.ProcessingStatus
 import com.ssintelligence.app.domain.model.ThemeMode
+import com.ssintelligence.app.domain.repository.ProcessingMode
 import com.ssintelligence.app.domain.repository.SettingsRepository
+import com.ssintelligence.app.domain.repository.StorageBreakdown
 import com.ssintelligence.app.indexing.SemanticIndexWorker
+import com.ssintelligence.app.indexing.VisualIndexWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -156,6 +159,67 @@ class SettingsViewModel(
         _embeddedCount.value = locator.semanticRepository.embeddedCount()
         _completedCount.value =
             locator.screenshotRepository.countByStatus()[ProcessingStatus.COMPLETED.name] ?: 0
+    }
+
+    // ------------------------------------------------- Phase 4 intelligence
+
+    private val _processingMode = MutableStateFlow(ProcessingMode.AUTOMATIC)
+    val processingMode: StateFlow<ProcessingMode> = _processingMode
+
+    private val _storage = MutableStateFlow<StorageBreakdown?>(null)
+    val storage: StateFlow<StorageBreakdown?> = _storage
+
+    val visualRebuildProgress: StateFlow<Int> =
+        VisualIndexWorker.observeProgress(locator.toApplicationContext())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    init {
+        refreshPhase4()
+    }
+
+    fun onProcessingModeChange(mode: ProcessingMode) {
+        viewModelScope.launch {
+            settings.setProcessingMode(mode)
+            _processingMode.value = mode
+        }
+    }
+
+    fun onBuildVisualIndex() {
+        VisualIndexWorker.requestNow(locator.toApplicationContext())
+    }
+
+    /** Deletes image embeddings and visual rows; text search is untouched (§64). */
+    fun onClearVisualIndex() {
+        viewModelScope.launch {
+            locator.database.visualDao().deleteAllVisuals()
+            refreshStorage()
+        }
+    }
+
+    /** Deletes automatic categories; user corrections survive (§64). */
+    fun onClearAutoCategories() {
+        viewModelScope.launch {
+            locator.database.semanticDao().deleteAllAutoCategories()
+        }
+    }
+
+    /** Deletes entities and relationships; screenshots and extraction stay (§64). */
+    fun onClearGraph() {
+        viewModelScope.launch {
+            locator.graphRepository.clearGraph()
+            refreshStorage()
+        }
+    }
+
+    fun refreshPhase4() {
+        viewModelScope.launch {
+            _processingMode.value = settings.processingMode()
+            refreshStorage()
+        }
+    }
+
+    private suspend fun refreshStorage() {
+        _storage.value = locator.screenshotRepository.storageBreakdown()
     }
 
     fun onThemeChange(mode: ThemeMode) {

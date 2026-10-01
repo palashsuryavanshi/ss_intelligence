@@ -21,8 +21,13 @@ semantic index — still with no download, no network permission, and no account
 are also categorized, summarized, grouped into smart collections, and linked to related
 screenshots, all on-device.
 
-Phase 4 would add visual search and richer cross-screenshot relationships. It is
-deliberately out of scope; the seams for it already exist. See [Roadmap](#roadmap).
+Phase 4 adds sight and structure. Search understands palette and shape — `blue screenshots`,
+`long screenshots`, or pick a picture and find the ones that look like it. A local knowledge
+graph turns extracted text into entities you can browse: everything about a product, the
+prices you actually saw with it, the websites it appeared on. Screenshots gain a timeline
+with events and sequences, manual collections, side-by-side comparison, and a
+near-duplicate view. The visual index is a perceptual hash and a set of geometric rules —
+no model to download, no permission added, still no network.
 
 ---
 
@@ -39,6 +44,9 @@ deliberately out of scope; the seams for it already exist. See [Roadmap](#roadma
 - [Indexing pipeline](#indexing-pipeline)
 - [Search and ranking](#search-and-ranking)
 - [Duplicate detection](#duplicate-detection)
+- [Visual intelligence](#visual-intelligence)
+- [Knowledge graph](#knowledge-graph)
+- [Organization](#organization)
 - [Performance notes](#performance-notes)
 - [Accessibility](#accessibility)
 - [Logging](#logging)
@@ -175,7 +183,17 @@ Everything below was run on an emulator (API 36 / SDK 37) rather than assumed:
   results instead of the whole library; the detail page showed an extractive summary,
   categories and related screenshots; Settings reported `hashed-ngram v1` with per-row
   coverage and the privacy dashboard stated each guarantee with its mechanism
-- 302 unit tests and 67 instrumented tests pass; release build succeeds under R8
+- Phase 4 verified on-device: `blue screenshots` returned only the screenshot whose extracted
+  palette contains blue, labelled **“Blue tones”**; `long screenshots` returned only the tall
+  stitched capture; pinning a screenshot as the search image ranked 25 lookalikes first on
+  pixels alone — all DuckDuckGo settings pages labelled “Very similar”, with the pinned image
+  itself correctly stepping aside; the Explore screen listed filed entities with reference
+  counts; an entity page showed both screenshots mentioning `termux.pro` with its websites and
+  categories; Settings reported a measured storage breakdown (328 KB screenshots + extracted,
+  92 KB text index, 332 KB text vectors, 12 KB image data, 60 KB graph, models
+  `built in (0 B)`) adding up inside a 1.3 MB database
+- 365 unit tests and 90 instrumented tests pass; release build succeeds under R8 with no
+  `INTERNET` permission
 
 Five bugs were found only by running this on a device, and all are now fixed and covered by
 regression tests:
@@ -204,6 +222,41 @@ Phase 3 added three more device-only findings:
    as results, masking the semantic fallback. A text query with no constraints left now
    tries meaning first, and answers no-results honestly if that fails too.
 
+Phase 4 added six more, all found by running it on a real library rather than by reasoning
+about the code:
+
+9. Adding the same screenshot to a collection twice filed two membership rows, so counts and
+   member lists double-counted it. A unique `(collection_id, screenshot_id)` index makes
+   re-adding a no-op by construction.
+10. Search-by-image ranked the query image itself first — it is, after all, maximally similar
+    to itself. It now steps aside; every other row keeps its place.
+11. **Every frequent OCR word became a PRODUCT entity.** The real library filed `post` on 10
+    screenshots, `search` on 9, `data` on 7, `protection` and `trackers` on 6 each — 365
+    product entities in total, which made Explore and the Home suggestion meaningless. A
+    phrase is now only a product if it carries a model number or a product noun, which cut the
+    same library to 12.
+12. **A global `(?i)` flag leaked onto the order-code pattern**, so the uppercase code class
+    also matched lowercase words: `order Protection` filed an ORDER named `Protection` on four
+    screenshots, which the Timeline then presented as a fabricated “event”. The flag is now
+    scoped to the keyword, and a code must contain a digit.
+13. **The storage breakdown reported 0 B for the text index, the text vectors and the image
+    data.** Table names were normalized with `substringBefore("_")`, which truncated every name
+    at its first underscore and collapsed eight tables into two buckets. `dbstat` entries are now
+    attributed to the table that owns them, including `sqlite_autoindex_*` and FTS shadow tables.
+14. **A pinned search image with an empty text box returned nothing.** The pin row rendered
+    correctly while the screen stayed on the idle prompt, because the “do we have input?” guard
+    only looked at the text box. A visual-only search is now its own retrieval path, ranked
+    directly by perceptual hash.
+15. That result list then announced itself as **“Searching for everything”** and **“Text
+    matches”** — both untrue. A blank query describes itself as “everything” because it has no
+    constraints, and the mode indicator had no third state. Both now say what actually
+    happened: “screenshots that look like the one you picked”, “Similar-looking screenshots”.
+
+Two test defects were also fixed rather than left to pass by luck: the month-boundary test
+seeded "3 days ago", which lands in the previous month on the 1st, 2nd or 3rd, and the
+migration tests reused database files left on the device by an earlier run, so a second run
+validated a schema the current migration code never produced.
+
 ---
 
 ## Tests
@@ -213,23 +266,31 @@ Phase 3 added three more device-only findings:
 ./gradlew connectedDebugAndroidTest  # Room + full search engine, requires a device/emulator
 ```
 
-**302 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
+**365 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
 screenshot heuristics, FTS query construction, the whole Phase 2 search layer (query parser
-and each sub-parser, intent classification, ranker, snippets, currency rendering), and the
+and each sub-parser, intent classification, ranker, snippets, currency rendering), the
 Phase 3 semantic layer (deterministic embeddings, concept expansion, hybrid scoring,
-rule classification, extractive summaries, entities, sensitive flags, smart groups). The
-search and semantic layers are deliberately free of Android dependencies so they are
-testable as plain JVM code.
+rule classification, extractive summaries, entities, sensitive flags, smart groups), and the
+Phase 4 layers (perceptual hashing, palette analysis, layout geometry, screenshot-type
+classification, entity normalization, product-naming rules, graph building, comparison, the
+visual query parser). The search, semantic, vision and graph layers are deliberately free of
+Android dependencies so they are testable as plain JVM code.
 
-**67 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
+**90 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
 search, search ranking, filters, duplicate lookup, the pending queue, stale-work recovery,
 incremental re-indexing, keyset pagination, index rebuild and OTP isolation from search),
-both schema migrations, the complete Phase 2 engine against a real SQLite engine, and the
+both schema migrations — all three, from v1, v2 and v3 — the complete Phase 2 engine against a
+real SQLite engine, and the
 Phase 3 hybrid engine over a fixed six-screenshot benchmark library — keyword, phrase,
 price, combined, date, URL, phone, code, duplicate, filter, sort, deletion, semantic
 concept queries, hybrid ordering, exact-match dominance, duplicate collapsing, the
-no-browse-masquerade rule, and Room-level semantic cascade behaviour — plus a 10,000-row
-performance suite.
+no-browse-masquerade rule, and Room-level semantic cascade behaviour — plus the Phase 4 layer
+over a real database: visual similarity ranking, near-duplicate clustering, palette and
+long-screenshot queries, search-by-image with and without text, visual-only search answering
+no-results rather than browsing, entity pages with prices and websites, cascade integrity
+(shared entities survive, orphans are swept), collection membership, timeline grouping, event
+and sequence detection, comparison, the v3→v4 migration, and the analyzer over synthetic
+pixels — plus a 10,000-row performance suite.
 
 One test is worth calling out because it guards a real bug found during development:
 `searchMatchesMultipleTermsAsAnd` asserts both that multi-term search works *and* that the
@@ -348,7 +409,7 @@ Notes:
 
 ## Database schema
 
-Room, version 1, with exported schemas in `app/schemas/`.
+Room, version 4, with exported schemas in `app/schemas/`.
 
 ### `screenshots`
 
@@ -384,6 +445,13 @@ stay cheap and indexable.
 | `extracted_otps` | `code` |
 | `ocr_blocks` | `level`, `text`, box coords, `confidence` |
 | `search_history` | `query`, `created_at` (opt-in, Phase 2) |
+| `screenshot_embeddings` | `vector` (512 floats), `model`, `version` (Phase 3) |
+| `screenshot_categories` | `category`, `confidence`, `source`, `classifier_version` (Phase 3) |
+| `screenshot_visuals` | `dhash`, `colors`, `brightness`, `is_dark`, `text_coverage`, `shot_type`, `layout`, `model_version` (Phase 4) |
+| `graph_entities` | `type`, `display_name`, `normalized_name` (Phase 4) |
+| `graph_relations` | `screenshot_id`, `entity_id`, `kind`, `confidence` (Phase 4) |
+| `collections` | `name`, `created_at` (Phase 4) |
+| `collection_members` | `collection_id`, `screenshot_id`, `added_at` (Phase 4) |
 
 All have an indexed `screenshot_id` foreign key with `ON DELETE CASCADE`, so deleting a
 screenshot can never leave orphaned extracted rows. `extracted_prices` is additionally indexed
@@ -401,11 +469,29 @@ is never synced anywhere.
 
 ### Schema version
 
-`version = 2`, with an explicit `MIGRATION_1_2` adding `search_history`. There is deliberately
-**no destructive fallback**: silently dropping a user's index because a version changed is
-exactly the failure mode the explicit "Clear index" control exists to avoid. A migration test
-validates the migrated schema against the exported `2.json`, so a hand-written `CREATE TABLE`
-that drifts from the entity definition fails in CI rather than on a user's device.
+`version = 4`, with three explicit migrations:
+
+| Migration | Adds |
+|---|---|
+| `MIGRATION_1_2` | `search_history` |
+| `MIGRATION_2_3` | `screenshot_embeddings`, `screenshot_categories` |
+| `MIGRATION_3_4` | `screenshot_visuals`, `graph_entities`, `graph_relations`, `collections`, `collection_members` |
+
+There is deliberately **no destructive fallback**: silently dropping a user's index because a
+version changed is exactly the failure mode the explicit "Clear index" control exists to
+avoid. A migration test validates each migrated schema against the exported JSON, so a
+hand-written `CREATE TABLE` that drifts from the entity definition fails in CI rather than on
+a user's device. The tests delete their database files first, so a second run validates the
+current migration code rather than a leftover schema from an earlier run.
+
+`collection_members` carries a unique index on `(collection_id, screenshot_id)`: adding the
+same screenshot twice is a no-op, so counts and member lists can never double-count.
+
+The Phase 4 tables are all derived data. Visuals recompute from pixels, the graph rebuilds
+from the extraction tables, and collections are user data carried across the upgrade untouched
+(empty by definition). The graph's foreign keys cascade, so deleting a screenshot removes its
+relationships and the orphan sweep drops entities nobody references any more — while shared
+entities survive.
 
 > **Implementation note.** `kotlinx-serialization-json` is pinned explicitly. Room 2.8.4's
 > migration code is compiled against 1.8.1 while Gradle's consistent resolution was choosing
@@ -458,7 +544,11 @@ ML Kit OCR
    ↓
 Extract URLs · Dates · Phones · Prices · OTPs   (each guarded independently)
    ↓
+Visual analysis: dHash · palette · type · layout  (Phase 4, from a ~192px decode)
+   ↓
 Single transaction: screenshot + geometry + all extracted tables
+   ↓
+Semantic + visual + graph indexing, after the commit  (each guarded independently)
    ↓
 COMPLETED
 ```
@@ -468,6 +558,11 @@ COMPLETED
 A failure in any **one** extraction step does not fail the screenshot — the partial result is
 still indexed and the degraded stage is logged. Only a failure to read or decode the image is
 fatal, because without an image there is nothing to index.
+
+Derived indexing follows the same rule, for the same reason: semantic, visual and graph
+indexing run **after** the core transaction commits and can never roll back the lexical index.
+A screenshot whose image cannot be analyzed still indexes and still searches; it simply has
+no palette and no visual neighbours until the visual index is rebuilt.
 
 ### Incremental indexing
 
@@ -489,6 +584,18 @@ Two `CoroutineWorker`s run as a single unique WorkManager chain:
 
 - `DiscoveryWorker` — scans MediaStore and reconciles the index.
 - `IndexingWorker` — processes queued screenshots.
+
+Two more handle the derived Phase 3/4 indexes, both resumable and chunked:
+
+- `SemanticIndexWorker` — text vectors, summaries and categories.
+- `VisualIndexWorker` — image hashes, palettes, types, layouts, and graph filing.
+
+Each backfill selects only rows whose stored `version` is behind the current one, so it is
+incremental rather than a full rebuild, and it stops visibly if a pass makes no progress
+instead of draining the battery. Background processing mode governs the catch-up: Automatic
+runs soon, Charging Only waits for power and idle, and Manual means only an explicit tap in
+Settings runs the builders. Browsing and search work identically in every mode — this only
+governs expensive background work.
 
 Properties that matter:
 
@@ -540,6 +647,10 @@ normalized number. That is what makes queries indexable and results explainable.
 | `9876543210`, `+91 98765 43210` | `+919876543210` |
 | `OTP 483921` | code `483921` (matched, never displayed) |
 | `show duplicate screenshots` | content filter, not the word "duplicate" |
+| `blue screenshots` | palette contains blue (Phase 4) |
+| `dark screenshots` / `light screenshots` | brightness flag, not a palette color |
+| `grey`, `violet`, `cyan`, `teal`, `maroon`, `beige` | nearest named color |
+| `long screenshots` / `tall` / `stitched` / `full page` | aspect ratio ≥ 2.8 (Phase 4) |
 
 Several parsers are **deliberately reluctant**, because a wrong structured filter silently
 removes the right answer:
@@ -552,8 +663,10 @@ removes the right answer:
   code. Codes are 4–8 digits, so a 10-digit phone can never be mistaken for one.
 - Currency is normalized but **never converted**. `$1,299` does not satisfy `₹1,299`.
 - `May` is only a month with a day number or a year, because "may" is also a modal verb.
+- `dark mode` is not a brightness ask. "Dark" and "light" are only treated as appearance when
+  they stand alone; in `dark mode` the phrase is left intact for the keyword extractor.
 
-Parser order is itself meaningful: date → URL → code → phone → price → content type →
+Parser order is itself meaningful: date → URL → code → phone → price → content type → visual →
 keywords. Each step claims its span of the query, so `₹39,999` becomes a price filter and
 never also a search term, and `from September` never leaves "from" behind for the price parser
 to misread.
@@ -617,7 +730,9 @@ The hidden members stay reachable from the duplicates screen, so nothing is buri
 
 Every result list says which half of the engine answered: `Meaning-based results` when the
 semantic index contributed, `Text matches` otherwise. Semantic hits carry a `Related to
-"…"` reason naming the concept, never an embedding value or a similarity number.
+"…"` reason naming the concept, never an embedding value or a similarity number. Phase 4 adds
+two more reason kinds, worded the same honest way: `Blue tones` when a palette matched, and
+the entity's own name (`Pixel 9a`) when the knowledge graph did.
 
 ### Filters, sorting, history
 
@@ -636,6 +751,32 @@ so a history row cannot be used to reconstruct what was found.
 Suggestions come only from data already on the device: recent searches, hosts seen in indexed
 screenshots, and short phrases mined from OCR text by matching the typed prefix against the
 local FTS index. The prefix never leaves the process and is never sent anywhere.
+
+### Multimodal search
+
+Search can combine a sentence, a picture, or both. Picking a screenshot as the search image
+pins it to the query, the box shows a thumbnail of what "like this one" refers to, and the
+library is ranked by perceptual-hash proximity. The query image itself steps aside — it is
+trivially similar to itself — while every other row keeps its place.
+
+An image **alone** is a search on its own: with no words there is nothing for the retrieval
+ladder to work from, so the library is ranked by Hamming distance directly and only rows
+within the similarity threshold come back. "Nothing looks like this" is a real answer, and it
+is reported as no results rather than as a browse.
+
+The two combine when both are present, which is the interesting case: words and pixels narrow
+independently, and the exact-match guarantee still holds. A screenshot matching the whole
+sentence and every structured filter scores 60 before the soft signals are counted, while
+semantic, visual and entity matches cap at 40 combined. No embedding and no hash, however
+close, can outrank an exact match — because 40 is less than 60, always. The weights are
+configurable; if they are ever re-tuned, the test asserting that floor fails rather than the
+guarantee dying quietly.
+
+The UI always says which signals answered. A list carrying only visual reasons reads
+**"Similar-looking screenshots"**, not "Text matches" — nothing about the words was
+considered, so claiming otherwise would be a lie. When several colors are named, the first
+reaches SQL as a filter and the rest score in the ranker. The image picker uses screenshots
+already on the device: no camera, no new permission.
 
 ### Debugging
 
@@ -711,16 +852,17 @@ rather than silently.
 
 ### Hybrid scoring
 
-Three normalized signals combine by configurable weight (starting point 45 / 35 / 20):
+Five normalized signals combine by configurable weight (Phase 4 starting point 40 / 25 / 20 /
+10 / 5 for lexical / semantic / metadata / visual / entity):
 
 ```
-final = lexical × 0.45 + semantic × 0.35 + metadata × 0.20
+final = lexical × 0.40 + semantic × 0.25 + metadata × 0.20 + visual × 0.10 + entity × 0.05
 ```
 
 The exact-match guarantee is arithmetic, not a special case: a full lexical + metadata
-match scores ~65 before semantics is counted, while a semantic-only match caps at 35. No
-embedding, however close, can outrank an exact match. A test pins this invariant so a
-future re-tuning breaks loudly instead of silently.
+match scores 60 before the soft signals are counted, while semantic, visual and entity
+matches cap at 40 combined. No embedding and no hash, however close, can outrank an exact
+match. A test pins this invariant so a future re-tuning breaks loudly instead of silently.
 
 ### Categories, summaries, related
 
@@ -767,10 +909,179 @@ OCR'd; later copies reuse its extracted information.
 The hashing rule itself lives in `ContentHasher`, free of Android types, so it is testable on
 a plain JVM.
 
-**Known limitation, by design:** hashing encoded bytes means two screenshots that look
-identical but were saved with different encoders will not match. That is precisely the
-near-duplicate case a `PerceptualHashDetector` (dHash/pHash) would catch in a later phase —
-which is why the interface exists rather than a concrete hash call at the call site.
+**Known limitation, addressed in Phase 4:** hashing encoded bytes means two screenshots that
+look identical but were saved with different encoders will not match. Perceptual hashing now
+covers that case — see [Visual intelligence](#visual-intelligence) — and the two are reported
+separately so "similar" is never called "duplicate".
+
+---
+
+## Visual intelligence
+
+Phase 4 adds sight without adding a model, a permission, or a byte of downloaded weights.
+
+### What the visual index actually is
+
+| Aspect | Value |
+|---|---|
+| Name | `dhash` (perceptual hash) + `visual-v1` rules |
+| Source | First principles, implemented in this repository |
+| License | Same as the app |
+| Size | 0 bytes — no download, nothing to install |
+| Architecture | Any; pure Kotlin over an `IntArray` of pixels |
+| Runtime | ~5 ms per screenshot at a 192px long edge |
+
+Two deliberately separate concerns:
+
+- `ImageEmbeddingProvider` produces a **64-bit dHash** — nine brightness transitions per
+  row, eight rows. It answers "does this look like that one?", and nothing else. dHash
+  compares *neighbouring* pixels, so a dark-mode variant of the same screen stays related
+  rather than reading as a different image.
+- `BitmapVisualAnalyzer` produces the **descriptive** signals: dominant colors, mean
+  brightness, screenshot type, layout, and long-screenshot detection. It reads OCR box
+  geometry that Phase 1 already stored, so layout is derived from text positions — chat
+  bubbles alternate sides, tables align into columns, receipts are narrow stacks.
+
+Everything is recomputed deterministically from pixels plus stored geometry. Nothing is a
+model opinion, and there are no object-recognition claims anywhere: the app reports that a
+screenshot is *mostly blue*, never that it *contains a phone*.
+
+### Palette and brightness
+
+Colors are named coarsely on purpose — eleven names with sRGB centers, weighted Euclidean
+nearest match, a color counted only above an 8% share so speckle is not palette, and the top
+three kept. The UI says exactly what that means: `blue screenshots` returns screenshots whose
+extracted palette contains blue, and a palette hit is labelled `Blue tones`. `dark` and
+`light` are brightness flags rather than colors, and `dark mode` is left alone as a phrase.
+
+### Screenshot type
+
+Accumulated evidence with weights, not a single keyword. OCR words, hosts, price presence,
+OTP presence, layout and aspect each contribute, and a type needs 1.5 points before it can
+win — so `account settings page` is App screen, not Banking. A long screenshot is recognized
+by aspect alone (≥ 2.8:1; phone captures are about 2.2:1) regardless of its content, and
+`LONG_SCREENSHOT` is its own type rather than a flag on another.
+
+### Memory discipline
+
+The analyzer decodes at a 192px long edge — a 1080×2400 screenshot becomes roughly 88×192,
+about 17k pixels, in `RGB_565` — computes everything from that, and recycles immediately. A
+palette, a hash and a brightness reading need no more. `OutOfMemoryError` and decode failures
+return a neutral analysis rather than propagating.
+
+### What the user sees
+
+- **Visually similar** (from a detail page or search-by-image): ranked by Hamming distance,
+  labelled `Near duplicate` / `Very similar` / `Similar`. Distances never appear as numbers.
+- **Similar screenshots** on the Duplicates screen: clusters within a few bits, explicitly
+  separated from exact duplicates and worded as "similar, not duplicates".
+- **Visual section on the detail page**: type, palette, layout, appearance — as observed
+  attributes, never as recognized objects.
+
+---
+
+## Knowledge graph
+
+Relational tables, not a graph database. Entities and relationships are rows, and every
+traversal is a join.
+
+### Model
+
+| Table | Holds |
+|---|---|
+| `graph_entities` | `type`, `display_name`, `normalized_name`, unique per `(type, normalized)` |
+| `graph_relations` | `screenshot_id`, `entity_id`, `kind`, `confidence` |
+
+Entity types: product, company, website, price, date, phone, order, booking, category,
+location, event. Relationship kinds: `mentions`, `priced at`, `sold by`, `found on`,
+`in category`, `dated`.
+
+**`similar` and `duplicate` are deliberately not stored.** Similarity comes from embeddings
+and duplication from content hashes, both recomputed live; persisting them would duplicate the
+source of truth and go stale the moment an embedding changed.
+
+### Grounding, and where it refuses to guess
+
+Every entity is grounded in data extraction already produced. Products come from the
+screenshot's own phrases, companies and websites from its hosts, prices, dates, phones and
+order codes from the normalized extraction tables, categories from the classifier. The builder
+invents nothing — it only files what extraction found.
+
+Two rules keep it honest:
+
+- **Companies come from hosts only.** The word "apple" in a recipe never files Apple Inc.;
+  `www.apple.com` does. Registrable-part extraction keeps `smile.amazon.in` and
+  `www.amazon.in` as the same company, including country-code domains like `bbc.co.uk`.
+- **A phrase must look like a product to be filed as one.** Without this, every frequent OCR
+  word became a product: a real library produced 365 of them, led by `post` (10 screenshots),
+  `search` (9) and `data` (7), and Explore degenerated into a word frequency list. Two kinds
+  of evidence are accepted, both grounded in the phrase itself — a **digit** (model numbers are
+  the strongest product signal there is: `Pixel 9a`, `OnePlus 13`) or a **product noun**
+  (`phone`, `laptop`, `earbuds` and a curated list of others). The same library then filed 12,
+  which are products. A bare number is never enough; the word has to be there too.
+- **Order and booking codes must contain a digit.** Real codes do (`7QK2LP`, `ORD998877`);
+  English words do not. Without that rule a lowercase word following "order" became an
+  identifier, and the Timeline offered a fabricated "event" for it.
+- **Merging is conservative.** Normalization collapses case, spacing, punctuation and joined
+  letter/digit boundaries, so `Pixel 9a`, `PIXEL 9A` and `Pixel9a` are one entity. A digit →
+  letter split is deliberately *not* applied, because `9a` is a model suffix and splitting it
+  would mean the entity could never match itself. A brand prefix stays part of the name:
+  `Google Pixel 9a` does not silently merge with `Pixel 9a`.
+
+Prices normalize to `currency:amount` and are never converted. Filing is find-or-create, one
+screenshot's footprint is replaced atomically, and re-indexing can never duplicate an edge.
+
+Entity pages list categories from the classifier but never show `OTHER` — that bucket means
+"nothing matched", and presenting it as a category states nothing.
+
+### Integrity
+
+Deleting a screenshot cascades its relationships. An entity nobody references any more is
+swept; an entity other screenshots still reference survives. Prices on an entity page are
+listed in screenshot-date order and titled "Prices seen in your screenshots" — an observation
+of what was on screen, never a claim about a current price.
+
+### Entity pages and Explore
+
+An entity page answers "everything about Pixel 9a": every screenshot mentioning it, the prices
+seen with it, its websites, its categories. Explore lists only entity types actually detected,
+each with its reference count, so the screen is empty rather than padded when there is nothing
+to show.
+
+---
+
+## Organization
+
+- **Timeline** — days the user actually took screenshots, newest first, each with that day's
+  top categories. A day appears only when screenshots exist on it; dates are never fabricated.
+- **Events** — screenshots sharing a booking or order identifier, within a 14-day span. The
+  shared code is the evidence; time proximity alone never groups anything, because a recurring
+  number is not an event.
+- **Sequences** — adjacent same-day screenshots (≤ 30 min apart) with at least 50% term
+  overlap. Both conditions are required: adjacency without overlap is just burst photography.
+- **Collections** — manual, many-to-many, storing references and never images. Membership is
+  unique per pair, so adding twice is a no-op. Alongside the Phase 3 smart collections, which
+  each state their own criteria so "why is this here" always has an answer.
+- **Compare** — two screenshots side by side with their detected differences: a moved price
+  as `Price ₹39999 → ₹41999`, a changed website, and added/removed terms. A price *change* is
+  only claimed when both sides have exactly one price in that currency; otherwise it is an
+  addition or removal, not a move. Pixel diffing is out of scope on purpose — status-bar icons
+  and rotating ads would be reported as change, which is noise dressed as information.
+- **Contextual actions** on the detail page (`Find visually similar`, `More from this
+  website`, `More about X`, `Compare`) are resolved against the index before being shown, so
+  an action that would lead nowhere is never constructed.
+- **One quiet suggestion** on Home: the most-referenced product with at least 5 screenshots,
+  inside the app and never as a notification.
+
+### Storage accounting
+
+Settings shows a **measured** breakdown from SQLite page accounting (`dbstat`), not estimates:
+screenshots and extracted data, text index, text vectors, image data, graph and categories,
+search history, and the total. Models report `built in (0 B)` because there are none to store.
+When page accounting is unavailable the section says so instead of guessing. Each derived
+component can also be deleted independently — image embeddings, automatic categories, the
+graph — and none of those actions touches screenshots, OCR text, extracted data, user
+collections, or category corrections.
 
 ---
 
@@ -788,6 +1099,12 @@ Designed against 1,000 / 10,000 / 50,000+ screenshots:
   seconds** — the unit of `date_added` — so converting in Kotlin rather than multiplying the
   column in SQL is what keeps the `(date_added, id)` index usable.
 - **Domain matching is host equality or a subdomain**, not a substring match on the URL.
+- **Hamming scans need no vector extension.** A 64-bit hash is 8 bytes; the whole library's
+  hashes fit in memory trivially, and visual similarity is a linear scan in Kotlin with no
+  index and no ANN structure. Near-duplicate clustering compares each row against group
+  representatives rather than every row, and the scan is capped like the search window.
+- **Multimodal context loads once per search, not once per row.** Candidate palettes, entity
+  labels and the query image's hash are three batched reads, not N.
 - **LazyColumn** everywhere; the screenshot browser never materializes the whole collection.
 - **Downscaled thumbnails only.** Coil owns the disk and memory cache.
 - **Bounded decode concurrency** (2 at a time) with batched work units.
@@ -876,7 +1193,7 @@ replacement, so the app stays completely functional with no model present.
 | 1 | Local indexing, OCR, extraction, duplicates, keyword search | — | done |
 | 2 | Structured query search, ranking, relaxed fallback, suggestions | — | done |
 | 3 | Local semantic search, categories, summaries, related, groups | `SemanticRepository`, `EmbeddingProvider` | done |
-| 4 | Visual search (image embeddings), collections, timeline, entity graph | new tables + `SemanticRepository` | not started |
+| 4 | Visual search (image embeddings), collections, timeline, entity graph | `ImageEmbeddingProvider`, `GraphRepository` | done |
 | 5 | Paging 3 over search results | `SearchRequest.limit` → `Pager` | not started |
 | 6 | Optional neural embedding model replacing `HashedNgramEmbeddingProvider` | `EmbeddingProvider` | not started |
 

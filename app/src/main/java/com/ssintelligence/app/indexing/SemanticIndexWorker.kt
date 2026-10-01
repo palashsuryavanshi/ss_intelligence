@@ -145,6 +145,33 @@ class SemanticIndexWorker(
                 .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request)
         }
 
+        /**
+         * Mode-aware catch-up (§62).
+         *
+         * Manual means never: only explicit taps run the builder. Charging-only
+         * waits for power and idle. Automatic runs soon, unconstrained — the
+         * work itself is chunked and resumable, so an interruption costs
+         * nothing.
+         */
+        fun requestCatchUp(
+            context: Context,
+            mode: com.ssintelligence.app.domain.repository.ProcessingMode,
+        ) {
+            when (mode) {
+                com.ssintelligence.app.domain.repository.ProcessingMode.MANUAL -> Unit
+                com.ssintelligence.app.domain.repository.ProcessingMode.CHARGING_ONLY ->
+                    requestQuietCatchUp(context)
+
+                com.ssintelligence.app.domain.repository.ProcessingMode.AUTOMATIC -> {
+                    val request = OneTimeWorkRequestBuilder<SemanticIndexWorker>()
+                        .addTag(WORK_NAME)
+                        .build()
+                    WorkManager.getInstance(context.applicationContext)
+                        .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request)
+                }
+            }
+        }
+
         fun observeProgress(context: Context): Flow<Int> =
             WorkManager.getInstance(context.applicationContext)
                 .getWorkInfosForUniqueWorkFlow(WORK_NAME)

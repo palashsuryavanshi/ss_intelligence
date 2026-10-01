@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,8 +29,23 @@ class MigrationInstrumentedTest {
         FrameworkSQLiteOpenHelperFactory(),
     )
 
+    /**
+     * These tests build real database files on the device, so a file left over
+     * from an earlier run would be migrated *again* — validating a schema that
+     * was never produced by the current migration code. Deleting first makes
+     * each test depend only on this source tree, not on install history.
+     */
+    @Before
+    fun deleteLeftoverDatabases() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        for (name in listOf(TEST_DB, TEST_DB_V3, TEST_DB_V4)) {
+            context.deleteDatabase(name)
+        }
+    }
+
     @Test
-    fun migrateFromOneToTwoKeepsTheIndexAndAddsSearchHistory() {        helper.createDatabase(TEST_DB, 1).apply {
+    fun migrateFromOneToTwoKeepsTheIndexAndAddsSearchHistory() {
+        helper.createDatabase(TEST_DB, 1).apply {
             execSQL(
                 """
                 INSERT INTO screenshots (
@@ -81,8 +97,7 @@ class MigrationInstrumentedTest {
     }
 
     @Test
-    fun migrateFromTwoToThreeKeepsTheIndexAndAddsSemanticTables() {
-        helper.createDatabase(TEST_DB_V3, 2).apply {
+    fun migrateFromTwoToThreeKeepsTheIndexAndAddsSemanticTables() {        helper.createDatabase(TEST_DB_V3, 2).apply {
             execSQL(
                 """
                 INSERT INTO screenshots (
@@ -135,8 +150,78 @@ class MigrationInstrumentedTest {
         migrated.close()
     }
 
+    @Test
+    fun migrateFromThreeToFourKeepsEverythingAndAddsVisualGraphTables() {
+        helper.createDatabase(TEST_DB_V4, 3).apply {
+            execSQL(
+                """
+                INSERT INTO screenshots (
+                    id, media_store_id, uri, filename, relative_path, date_added,
+                    date_modified, file_size, width, height, mime_type, ocr_text,
+                    content_hash, duplicate_of_id, status, processing_error,
+                    created_at, updated_at
+                ) VALUES (1, 42, 'content://x', 'Screenshot_1.png', 'Pictures/Screenshots',
+                    1700000000, 1700000000, 1024, 1080, 2400, 'image/png',
+                    'Google Pixel 9a', 'hash-1', NULL, 'COMPLETED', NULL, 0, 0)
+                """.trimIndent(),
+            )
+            execSQL(
+                "INSERT INTO screenshot_embeddings " +
+                    "(screenshot_id, vector, model, version, dimension, created_at) " +
+                    "VALUES (1, zeroblob(16), 'hashed-ngram', '1', 4, 0)",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB_V4,
+            4,
+            true,
+            SsIntelligenceDatabase.MIGRATION_3_4,
+        )
+
+        // Screenshots and text embeddings survive.
+        migrated.query("SELECT filename FROM screenshots WHERE id = 1").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Screenshot_1.png", cursor.getString(0))
+        }
+        migrated.query("SELECT COUNT(*) FROM screenshot_embeddings").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+
+        // The new tables exist and are writable.
+        migrated.execSQL(
+            "INSERT INTO screenshot_visuals (screenshot_id, dhash, colors, brightness, " +
+                "is_dark, text_coverage, shot_type, layout, model_version, created_at) " +
+                "VALUES (1, 123, 'blue,white', 200.0, 0, 0.3, 'APP_UI', 'NONE', 'visual-v1', 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO graph_entities (type, display_name, normalized_name, created_at) " +
+                "VALUES ('PRODUCT', 'Pixel 9a', 'pixel 9a', 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO graph_relations (screenshot_id, entity_id, kind, confidence) " +
+                "VALUES (1, 1, 'MENTIONS', 0.7)",
+        )
+        migrated.execSQL(
+            "INSERT INTO collections (name, created_at) VALUES ('Trip', 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO collection_members (collection_id, screenshot_id, added_at) " +
+                "VALUES (1, 1, 0)",
+        )
+        migrated.query("SELECT COUNT(*) FROM graph_relations").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+
+        migrated.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         const val TEST_DB_V3 = "migration-test-v3.db"
+        const val TEST_DB_V4 = "migration-test-v4.db"
     }
 }

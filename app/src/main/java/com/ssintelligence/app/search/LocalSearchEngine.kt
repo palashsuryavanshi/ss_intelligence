@@ -2,12 +2,14 @@ package com.ssintelligence.app.search
 
 import com.ssintelligence.app.data.database.ScreenshotDao
 import com.ssintelligence.app.data.database.ScreenshotEntity
+import com.ssintelligence.app.data.database.VisualDao
 import com.ssintelligence.app.data.database.toDomain
 import com.ssintelligence.app.domain.model.ExtractedPhone
 import com.ssintelligence.app.domain.model.ExtractedPrice
 import com.ssintelligence.app.domain.model.ExtractedUrl
 import com.ssintelligence.app.domain.repository.SearchHistoryRepository
 import com.ssintelligence.app.domain.repository.SettingsRepository
+import com.ssintelligence.app.graph.GraphRepository
 import com.ssintelligence.app.search.parser.PriceQueryParser
 import com.ssintelligence.app.search.parser.QueryParser
 import com.ssintelligence.app.semantic.ConceptQueryExpander
@@ -15,6 +17,8 @@ import com.ssintelligence.app.semantic.HybridRanker
 import com.ssintelligence.app.semantic.HybridSignals
 import com.ssintelligence.app.semantic.QueryExpansionProvider
 import com.ssintelligence.app.semantic.SemanticRepository
+import com.ssintelligence.app.vision.ImageEmbedding
+import com.ssintelligence.app.vision.hammingDistance
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -54,6 +58,12 @@ class LocalSearchEngine(
     private val semanticSettings: SettingsRepository? = null,
     private val expander: QueryExpansionProvider = ConceptQueryExpander(),
     private val hybridRanker: HybridRanker = HybridRanker(),
+    /**
+     * Visual and graph indexes for the multimodal signals (§30, §48).
+     * Null in tests that only exercise earlier phases.
+     */
+    private val visualDao: VisualDao? = null,
+    private val graphRepository: GraphRepository? = null,
 ) : ScreenshotSearchEngine {
 
     private val suggestionBuilder = SearchSuggestionBuilder(dao, history)
@@ -69,6 +79,15 @@ class LocalSearchEngine(
         val startedAt = clock()
         val parsed = parser.parse(request.query)
         val effective = mergeManualFilters(parsed, request)
+
+        // Search-by-image with no words is its own retrieval path: there is no
+        // query to retrieve against, so the library is ranked by perceptual hash
+        // directly. Found on the device — a pinned image with an empty box
+        // returned nothing at all, because every rung of the ladder had no
+        // constraint to work from.
+        if (request.visualQueryId != null && effective.isEmpty) {
+            return visualOnlySearch(effective, request, startedAt)
+        }
 
         var lastLevel = RelaxationLevel.EXACT
         for (level in ladder(effective)) {
@@ -97,10 +116,18 @@ class LocalSearchEngine(
             val ranked = ranker.rank(effective, candidates, clock())
             if (ranked.isEmpty()) continue
 
-            val hybrid = applySemanticFusion(effective, ranked)
+            val hybrid = applySemanticFusion(effective, ranked, request.visualQueryId)
             if (hybrid.results.isEmpty()) continue
 
-            val ordered = applySortResults(hybrid.results, request.sortMode)
+            // Search-by-image ranks the library against one of its own rows;
+            // the query image itself would win trivially, so it steps aside.
+            // This is filtering, not ranking: every other row keeps its place.
+            val withoutSelf = if (request.visualQueryId != null) {
+                hybrid.results.filter { it.screenshot.id != request.visualQueryId }
+            } else {
+                hybrid.results
+            }
+            val ordered = applySortResults(withoutSelf, request.sortMode)
             return SearchResponse(
                 query = effective,
                 results = ordered.take(request.limit),
@@ -202,6 +229,7 @@ class LocalSearchEngine(
     private suspend fun applySemanticFusion(
         query: SearchQuery,
         ranked: List<RankedResult>,
+        visualQueryId: Long? = null,
     ): FusedResults {
         val semantic = semanticRepository
         val enabled = semantic != null && semantic.isAvailable &&
@@ -210,7 +238,7 @@ class LocalSearchEngine(
             return FusedResults(collapseDuplicates(ranked.map { it.toResult() }), false)
         }
         return try {
-            fuseWithSemantics(query, ranked, semantic!!)
+            fuseWithSemantics(query, ranked, semantic!!, visualQueryId)
         } catch (error: Exception) {
             FusedResults(collapseDuplicates(ranked.map { it.toResult() }), false)
         }
@@ -220,6 +248,7 @@ class LocalSearchEngine(
         query: SearchQuery,
         ranked: List<RankedResult>,
         semantic: SemanticRepository,
+        visualQueryId: Long? = null,
     ): FusedResults {
         val expansionTerms = expander.expandTerms(query.ftsTerms)
         val semanticMatches = semantic.searchSimilar(
@@ -227,25 +256,30 @@ class LocalSearchEngine(
             expansionTerms = expansionTerms,
             limit = SemanticRepository.DEFAULT_SEARCH_LIMIT,
         )
-        if (semanticMatches.isEmpty()) {
-            return FusedResults(collapseDuplicates(ranked.map { it.toResult() }), false)
-        }
         val similarityById = semanticMatches.associate { it.screenshotId to it.similarity }
 
         val conceptLabel = expander.conceptsForQuery(query.ftsTerms).firstOrNull()
         val relatedLabel = conceptLabel ?: query.phrases.firstOrNull() ?: query.originalQuery.trim()
 
+        // Multimodal context, loaded once per search rather than per row.
+        val multimodal = loadMultimodalContext(query, ranked, visualQueryId)
+
         val scored = ranked.map { result ->
+            val id = result.candidate.screenshot.id
             val lexical = hybridRanker.normalizeLexical(result.score)
-            val similarity = similarityById[result.candidate.screenshot.id] ?: 0.0
+            val similarity = similarityById[id] ?: 0.0
             val metadata = metadataShare(query, result)
-            val hybrid = hybridRanker.score(HybridSignals(lexical, similarity, metadata))
-            val reasons = if (similarity > 0 &&
-                result.reasons.none { it.kind == MatchKind.SEMANTIC }
-            ) {
-                result.reasons + MatchReason("Related to \"$relatedLabel\"", MatchKind.SEMANTIC)
-            } else {
-                result.reasons
+            val visual = visualScoreFor(query, id, multimodal.visuals, multimodal.queryHash)
+            val entity = entityScoreFor(query, id, multimodal.entities)
+            val hybrid = hybridRanker.score(
+                HybridSignals(lexical, similarity, metadata, visual, entity),
+            )
+            val reasons = buildList {
+                addAll(result.reasons)
+                if (similarity > 0 && none { it.kind == MatchKind.SEMANTIC }) {
+                    add(MatchReason("Related to \"$relatedLabel\"", MatchKind.SEMANTIC))
+                }
+                addAll(multimodalReasons(query, id, multimodal))
             }
             ScoredResult(result, hybrid, reasons, similarity > 0)
         }
@@ -266,6 +300,8 @@ class LocalSearchEngine(
                 val screenshot = row.toDomain()
                 val needles = (query.phrases + query.textTerms).distinct()
                 val reason = MatchReason("Related to \"$relatedLabel\"", MatchKind.SEMANTIC)
+                val visual = visualScoreFor(query, row.id, multimodal.visuals, multimodal.queryHash)
+                val entity = entityScoreFor(query, row.id, multimodal.entities)
                 ScoredResult(
                     result = RankedResult(
                         candidate = RankCandidate(screenshot),
@@ -273,8 +309,8 @@ class LocalSearchEngine(
                         reasons = listOf(reason),
                         snippet = SnippetBuilder.build(screenshot.ocrText, needles),
                     ),
-                    hybrid = hybridRanker.score(HybridSignals(0.0, similarity, 0.0)),
-                    reasons = listOf(reason),
+                    hybrid = hybridRanker.score(HybridSignals(0.0, similarity, 0.0, visual, entity)),
+                    reasons = listOf(reason) + multimodalReasons(query, row.id, multimodal),
                     semantic = true,
                 )
             }
@@ -290,6 +326,157 @@ class LocalSearchEngine(
             collapseDuplicates(combined.map { it.toResult() }),
             combined.any { it.semantic },
         )
+    }
+
+    /**
+     * Everything the visual and entity signals need, loaded in three bounded
+     * reads: candidate palettes, candidate entity labels, and the query
+     * image's hash for search-by-image.
+     */
+    private data class MultimodalContext(
+        val visuals: Map<Long, VisualRow>,
+        val entities: Map<Long, Set<String>>,
+        val queryHash: Long?,
+        val queryEntities: Set<String>,
+    )
+
+    private data class VisualRow(
+        val colors: List<String>,
+        val isDark: Boolean,
+        val hash: Long?,
+    )
+
+    private suspend fun loadMultimodalContext(
+        query: SearchQuery,
+        ranked: List<RankedResult>,
+        visualQueryId: Long?,
+    ): MultimodalContext {
+        val ids = ranked.map { it.candidate.screenshot.id }
+        val dao = visualDao
+        val visuals = if (dao == null || ids.isEmpty()) {
+            emptyMap()
+        } else {
+            runCatching { dao.visualsForIds(ids) }
+                .getOrDefault(emptyList())
+                .associate { row ->
+                    row.screenshotId to VisualRow(
+                        colors = row.colors.split(',').filter { it.isNotBlank() },
+                        isDark = row.isDark,
+                        hash = row.dhash,
+                    )
+                }
+        }
+        val graph = graphRepository
+        val entities = if (graph == null || ids.isEmpty()) {
+            emptyMap()
+        } else {
+            runCatching { graph.entityLabelsFor(ids) }.getOrDefault(emptyMap())
+        }
+        val queryHash = visualQueryId?.let {
+            runCatching { dao?.visualFor(it)?.dhash }.getOrNull()
+        }
+        return MultimodalContext(
+            visuals = visuals,
+            entities = entities,
+            queryHash = queryHash,
+            queryEntities = queryEntityLabels(query),
+        )
+    }
+
+    /** Entity labels the query names: phrases, hosts, price labels. */
+    private fun queryEntityLabels(query: SearchQuery): Set<String> = buildSet {
+        addAll(query.phrases.map { it.lowercase() })
+        addAll(query.textTerms.map { it.lowercase() })
+        addAll(query.urls.map { it.lowercase() })
+        addAll(query.prices.map { it.display().lowercase() })
+    }
+
+    private fun paletteOverlap(queryColors: List<String>, palette: List<String>): Double {
+        if (queryColors.isEmpty()) return 0.0
+        val paletteSet = palette.map { it.lowercase() }.toSet()
+        val hits = queryColors.count { it.lowercase() in paletteSet }
+        return hits.toDouble() / queryColors.size
+    }
+
+    private fun visualScoreFor(
+        query: SearchQuery,
+        id: Long,
+        visuals: Map<Long, VisualRow>,
+        queryHash: Long?,
+    ): Double {
+        val row = visuals[id] ?: return 0.0
+        var score = 0.0
+        if (query.colors.isNotEmpty()) {
+            score = maxOf(score, paletteOverlap(query.colors, row.colors))
+        }
+        val candidateHash = row.hash
+        if (queryHash != null && candidateHash != null) {
+            val distance = hammingDistance(queryHash, candidateHash)
+            score = maxOf(
+                score,
+                (1.0 - distance / ImageEmbedding.DISSIMILAR_AT).coerceIn(0.0, 1.0),
+            )
+        }
+        return score.coerceIn(0.0, 1.0)
+    }
+
+    private fun entityScoreFor(
+        query: SearchQuery,
+        id: Long,
+        entities: Map<Long, Set<String>>,
+    ): Double {
+        val wanted = queryEntityLabels(query)
+        if (wanted.isEmpty()) return 0.0
+        val labels = entities[id].orEmpty().map { it.lowercase() }.toSet()
+        if (labels.isEmpty()) return 0.0
+        // A candidate shares an entity when any label contains a query term or
+        // vice versa: "pixel 9a" the phrase matches the "Pixel 9a" entity.
+        val hits = wanted.count { want -> labels.any { it.contains(want) || want.contains(it) } }
+        return (hits.toDouble() / wanted.size).coerceIn(0.0, 1.0)
+    }
+
+    /**
+     * Human-readable reasons for the visual and entity signals (§54).
+     *
+     * Palette matches say which colors ("Blue tones"); entity matches name the
+     * entity ("Pixel 9a"). Visual search by image says "Visually similar".
+     * Never a distance, never a score.
+     */
+    private fun multimodalReasons(
+        query: SearchQuery,
+        id: Long,
+        multimodal: MultimodalContext,
+    ): List<MatchReason> {
+        val reasons = mutableListOf<MatchReason>()
+        val row = multimodal.visuals[id]
+        if (row != null && query.colors.isNotEmpty()) {
+            val paletteSet = row.colors.map { it.lowercase() }.toSet()
+            query.colors.firstOrNull { it.lowercase() in paletteSet }?.let { color ->
+                val label = when (color.lowercase()) {
+                    "dark" -> "Dark appearance"
+                    "light" -> "Light appearance"
+                    else -> "${color.replaceFirstChar { it.uppercaseChar() }} tones"
+                }
+                reasons += MatchReason(label, MatchKind.VISUAL)
+            }
+        }
+        if (multimodal.queryHash != null && row?.hash != null) {
+            val distance = hammingDistance(multimodal.queryHash, row.hash)
+            if (distance <= ImageEmbedding.NEAR_DUPLICATE_BITS * 2) {
+                reasons += MatchReason("Visually similar", MatchKind.VISUAL)
+            }
+        }
+        val wanted = multimodal.queryEntities
+        val labels = multimodal.entities[id].orEmpty()
+        if (wanted.isNotEmpty() && labels.isNotEmpty()) {
+            val hit = labels.firstOrNull { label ->
+                wanted.any { want -> label.contains(want) || want.contains(label) }
+            }
+            if (hit != null && reasons.none { it.kind == MatchKind.ENTITY }) {
+                reasons += MatchReason(hit, MatchKind.ENTITY)
+            }
+        }
+        return reasons
     }
 
     private data class ScoredResult(
@@ -508,6 +695,10 @@ class LocalSearchEngine(
             domain = query.urls.firstOrNull() ?: request.manualFilters.domain,
             otp = query.otpCodes.firstOrNull(),
             filterTypes = filterTypesFor(query, request),
+            // One color reaches SQL; the rest score in the ranker. The first
+            // is the most specific (parser order), so it filters best.
+            color = query.colors.firstOrNull(),
+            longOnly = query.longScreenshotsOnly,
             candidateLimit = candidateLimit,
         )
     }
@@ -572,6 +763,8 @@ class LocalSearchEngine(
             domain = plan.domain,
             otp = plan.otp,
             filterTypes = plan.filterTypes,
+            color = plan.color,
+            longOnly = plan.longOnly,
             limit = plan.candidateLimit,
         )
 
@@ -592,6 +785,8 @@ class LocalSearchEngine(
                 domain = plan.domain,
                 otp = plan.otp,
                 filterTypes = plan.filterTypes,
+                color = plan.color,
+                longOnly = plan.longOnly,
                 limit = plan.candidateLimit,
             )
         }.orEmpty()
@@ -610,6 +805,8 @@ class LocalSearchEngine(
             domain = domain,
             otp = otp,
             filterTypes = filterTypes,
+            color = color,
+            longOnly = longOnly,
             limit = candidateLimit,
         )
 
@@ -648,6 +845,85 @@ class LocalSearchEngine(
         score = score,
         snippet = snippet,
         matches = reasons,
+    )
+
+    /**
+     * Ranks the library by perceptual-hash proximity to the pinned image.
+     *
+     * No text query means no lexical candidates, so this replaces the whole
+     * retrieval ladder rather than joining it. The query image itself is
+     * excluded — it is trivially identical to itself — and the distance is
+     * reported as a word ("Near duplicate", "Very similar", "Similar"), never as
+     * a number, matching the rule the rest of the app follows.
+     *
+     * Only rows within the similar threshold are returned. A row that shares
+     * almost no structure with the query is not a weak match, it is a different
+     * screenshot, and listing it would be padding.
+     */
+    private suspend fun visualOnlySearch(
+        query: SearchQuery,
+        request: SearchRequest,
+        startedAt: Long,
+    ): SearchResponse {
+        val visuals = visualDao
+        val queryId = request.visualQueryId
+        if (visuals == null || queryId == null) return visualOnlyEmpty(query, startedAt)
+        val self = runCatching { visuals.visualFor(queryId) }.getOrNull()
+            ?: return visualOnlyEmpty(query, startedAt)
+        val ranked = visuals.allHashes()
+            .asSequence()
+            .filter { it.screenshotId != queryId }
+            .map { it to hammingDistance(self.dhash, it.dhash) }
+            .filter { it.second <= VISUAL_ONLY_MAX_BITS }
+            .sortedBy { it.second }
+            .take(request.limit)
+            .toList()
+        if (ranked.isEmpty()) return visualOnlyEmpty(query, startedAt)
+        val rows = dao.getByIds(ranked.map { it.first.screenshotId }).associateBy { it.id }
+        val results = ranked.mapNotNull { (row, distance) ->
+            val entity = rows[row.screenshotId] ?: return@mapNotNull null
+            SearchResult(
+                screenshot = entity.toDomain(),
+                // Ordering is carried by the list, not the score: a Hamming
+                // distance is not a relevance number and must not be shown as one.
+                score = 0,
+                // No snippet: the match was visual, not textual. There is no
+                // matched phrase to highlight, and pasting raw OCR under a
+                // picture would imply the words are why it was selected.
+                snippet = null,
+                matches = listOf(MatchReason(visualDistanceLabel(distance), MatchKind.VISUAL)),
+            )
+        }
+        return SearchResponse(
+            query = query,
+            results = results,
+            relaxation = RelaxationLevel.EXACT,
+            candidateCount = results.size,
+            elapsedMillis = clock() - startedAt,
+            semanticUsed = false,
+        )
+    }
+
+    /** Maps a Hamming distance to the words the UI shows. */
+    private fun visualDistanceLabel(bits: Int): String = when {
+        bits == 0 -> "Identical pixels"
+        bits <= ImageEmbedding.NEAR_DUPLICATE_BITS -> "Near duplicate"
+        bits <= 16 -> "Very similar"
+        else -> "Similar"
+    }
+
+    /**
+     * The honest answer when nothing is visually close enough: no results.
+     * Never a browse — "nothing looks like this" is a real answer, and listing
+     * the whole library under a pinned image would be a lie about similarity.
+     */
+    private fun visualOnlyEmpty(query: SearchQuery, startedAt: Long) = SearchResponse(
+        query = query,
+        results = emptyList(),
+        relaxation = RelaxationLevel.EXACT,
+        candidateCount = 0,
+        elapsedMillis = clock() - startedAt,
+        semanticUsed = false,
     )
 
     // ---------------------------------------------------------------- merging
@@ -718,6 +994,8 @@ class LocalSearchEngine(
         val domain: String?,
         val otp: String?,
         val filterTypes: String,
+        val color: String?,
+        val longOnly: Boolean,
         val candidateLimit: Int,
     ) {
         /**
@@ -742,6 +1020,14 @@ class LocalSearchEngine(
 
         /** Semantic-only rows admitted per search, beyond the lexical set. */
         const val SEMANTIC_EXTRA_LIMIT = 20
+
+        /**
+         * Hamming ceiling for a visual-only search. Wider than the "visually
+         * similar" listing (20) because that list is a deliberate top-8 of one
+         * screenshot's neighbours, while this is the whole result set — past
+         * this point the images share no structure worth showing.
+         */
+        const val VISUAL_ONLY_MAX_BITS = 24
 
         /** OCR prefix compared for near-duplicate collapsing in results. */
         const val SNIPPET_DEDUP_CHARS = 200

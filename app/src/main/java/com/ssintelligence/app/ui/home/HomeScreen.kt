@@ -48,11 +48,16 @@ fun HomeScreen(
     onNavigateToBrowse: () -> Unit,
     onNavigateToDuplicates: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToTimeline: () -> Unit = {},
+    onNavigateToCollections: () -> Unit = {},
+    onNavigateToExplore: () -> Unit = {},
+    onOpenEntity: (Long) -> Unit = {},
     onOpenScreenshot: (Long) -> Unit,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(locator)),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val groups by viewModel.groups.collectAsStateWithLifecycle()
+    val suggestion by viewModel.suggestion.collectAsStateWithLifecycle()
     val recent by locator.screenshotRepository
         .observeRecent(RECENT_LIMIT)
         .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -107,6 +112,9 @@ fun HomeScreen(
                     onSearch = onNavigateToSearch,
                     onBrowse = onNavigateToBrowse,
                     onDuplicates = onNavigateToDuplicates,
+                    onTimeline = onNavigateToTimeline,
+                    onCollections = onNavigateToCollections,
+                    onExplore = onNavigateToExplore,
                 )
             }
 
@@ -119,6 +127,15 @@ fun HomeScreen(
                     )
                 }
             } else {
+                suggestion?.let { item ->
+                    item("suggestion") {
+                        SuggestionCard(
+                            label = item.label,
+                            count = item.count,
+                            onClick = { onOpenEntity(item.entityId) },
+                        )
+                    }
+                }
                 if (groups.isNotEmpty()) {
                     item("collections-header") {
                         SectionHeader("Smart Collections")
@@ -205,6 +222,9 @@ private fun ActionRow(
     onSearch: () -> Unit,
     onBrowse: () -> Unit,
     onDuplicates: () -> Unit,
+    onTimeline: () -> Unit,
+    onCollections: () -> Unit,
+    onExplore: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         androidx.compose.material3.Button(onClick = onScanNow, modifier = Modifier.fillMaxWidth()) {
@@ -224,6 +244,22 @@ private fun ActionRow(
                 modifier = Modifier.weight(1f),
             ) { Text("Duplicates") }
         }
+        // Second row, not bottom navigation: these are destinations, not tabs,
+        // and the hierarchy stays Home → place → back (§51).
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = onTimeline,
+                modifier = Modifier.weight(1f),
+            ) { Text("Timeline") }
+            androidx.compose.material3.OutlinedButton(
+                onClick = onCollections,
+                modifier = Modifier.weight(1f),
+            ) { Text("Collections") }
+            androidx.compose.material3.OutlinedButton(
+                onClick = onExplore,
+                modifier = Modifier.weight(1f),
+            ) { Text("Explore") }
+        }
     }
 }
 
@@ -231,6 +267,40 @@ private fun ActionRow(
 private fun formatCount(value: Int): String =
     if (value < 1000) value.toString()
     else value.toString().reversed().chunked(3).joinToString(",").reversed()
+
+/**
+ * One quiet in-app suggestion (§35): "You have N screenshots about X."
+ *
+ * Shown only when an entity covers enough screenshots to be worth opening,
+ * and never as a notification. Tapping opens the entity page.
+ */
+@Composable
+private fun SuggestionCard(
+    label: String,
+    count: Int,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+        onClick = onClick,
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = "You have $count screenshots about $label.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "View collection →",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
 
 /**
  * One smart collection (§24).

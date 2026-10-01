@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -20,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
@@ -76,6 +78,12 @@ fun SearchScreen(
     onOpenScreenshot: (Long) -> Unit,
     /** Debug builds only; see the note on the title composable. */
     onOpenSearchDebug: (() -> Unit)? = null,
+    /** Pre-filled query for "More from X" actions. Applied once on entry. */
+    presetQuery: String = "",
+    /** Search-by-image target, owned by the navigation host. */
+    visualQueryId: Long? = null,
+    /** Opens the image picker (§7). */
+    onPickImage: () -> Unit = {},
     viewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory(locator)),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -83,6 +91,7 @@ fun SearchScreen(
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val manual by viewModel.manual.collectAsStateWithLifecycle()
     val sort by viewModel.sort.collectAsStateWithLifecycle()
+    val pinnedVisual by viewModel.visualQuery.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val recent by viewModel.recentSearches.collectAsStateWithLifecycle()
     val indexing by viewModel.indexing.collectAsStateWithLifecycle()
@@ -90,6 +99,18 @@ fun SearchScreen(
     val listState = rememberLazyListState()
     val keyboard = LocalSoftwareKeyboardController.current
     var showFilters by rememberSaveable { mutableStateOf(false) }
+
+    // A preset query (from "More from X") fills the box once on entry. Keyed
+    // on the preset itself so navigating back and forth re-applies it.
+    androidx.compose.runtime.LaunchedEffect(presetQuery) {
+        if (presetQuery.isNotBlank()) viewModel.onQueryChange(presetQuery)
+    }
+
+    // The pinned image arrives from the picker through the host. Keyed on the
+    // id so re-picking the same image is a no-op and clearing works.
+    androidx.compose.runtime.LaunchedEffect(visualQueryId) {
+        viewModel.onVisualQueryChange(visualQueryId)
+    }
 
     // A new query means a new result set: start at the top rather than keeping
     // an offset that no longer refers to anything.
@@ -122,6 +143,9 @@ fun SearchScreen(
                     SortMenu(selected = sort, onSelect = viewModel::onSortChange)
                     IconButton(onClick = { showFilters = true }) {
                         Icon(Icons.Filled.Tune, contentDescription = "Refine results")
+                    }
+                    IconButton(onClick = onPickImage) {
+                        Icon(Icons.Filled.Image, contentDescription = "Search by image")
                     }
                 },
             )
@@ -167,6 +191,14 @@ fun SearchScreen(
 
             FilterRow(selected = filters, onToggle = viewModel::onFilterToggle)
 
+            pinnedVisual?.let { pinnedId ->
+                PinnedImageRow(
+                    locator = locator,
+                    screenshotId = pinnedId,
+                    onClear = { viewModel.onVisualQueryChange(null) },
+                )
+            }
+
             when (val current = state) {
                 SearchUiState.Idle -> IdleContent(
                     suggestions = suggestions.map { it.text },
@@ -182,6 +214,7 @@ fun SearchScreen(
                     state = current,
                     listState = listState,
                     onOpenScreenshot = onOpenScreenshot,
+                    pinnedVisual = pinnedVisual,
                 )
 
                 is SearchUiState.NoResults -> NoResultsContent(
@@ -288,6 +321,7 @@ private fun ResultsContent(
     state: SearchUiState.Results,
     listState: LazyListState,
     onOpenScreenshot: (Long) -> Unit,
+    pinnedVisual: Long?,
 ) {
     LazyColumn(
         state = listState,
@@ -295,7 +329,17 @@ private fun ResultsContent(
         contentPadding = SearchListPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item("parsed") { ParsedQueryBanner(description = state.parsed.describe()) }
+        item("parsed") {
+            // An empty query describes itself as "everything", which is both
+            // wrong and alarming next to a pinned image: the search is not a
+            // browse. Say what actually narrowed it.
+            val description = if (state.parsed.isEmpty && pinnedVisual != null) {
+                "screenshots that look like the one you picked"
+            } else {
+                state.parsed.describe()
+            }
+            ParsedQueryBanner(description = description)
+        }
 
         if (state.relaxed) {
             item("relaxed") {
@@ -323,9 +367,15 @@ private fun ResultsContent(
  * contributed; otherwise the honest label is "Text matches". The distinction
  * is the transparency the spec asks for: the user should know which half of
  * the engine answered.
+ *
+ * A visual-only search is a third mode. Labelling its results "Text matches"
+ * would be a straightforward lie — nothing about the words was considered —
+ * so results that carry a visual reason say so instead.
  */
 @Composable
 private fun ResultCountLine(state: SearchUiState.Results) {
+    val visualOnly = state.results.isNotEmpty() &&
+        state.results.all { result -> result.matches.any { it.kind == com.ssintelligence.app.search.MatchKind.VISUAL } }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             text = "${state.results.size} result${if (state.results.size == 1) "" else "s"}",
@@ -333,10 +383,10 @@ private fun ResultCountLine(state: SearchUiState.Results) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = if (state.response.semanticUsed) {
-                "Meaning-based results"
-            } else {
-                "Text matches"
+            text = when {
+                visualOnly -> "Similar-looking screenshots"
+                state.response.semanticUsed -> "Meaning-based results"
+                else -> "Text matches"
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -465,4 +515,44 @@ private fun SortMode.label(): String = when (this) {
     SortMode.RELEVANCE -> "Relevance"
     SortMode.NEWEST -> "Newest"
     SortMode.OLDEST -> "Oldest"
+}
+
+/**
+ * The pinned search-by-image target (§7).
+ *
+ * Shows the thumbnail so the user can see what "like this one" means, with an
+ * explicit remove action. Text and image combine while both are present.
+ */
+@Composable
+private fun PinnedImageRow(
+    locator: ServiceLocator,
+    screenshotId: Long,
+    onClear: () -> Unit,
+) {
+    val screenshot by locator.screenshotRepository.observeScreenshot(screenshotId)
+        .collectAsStateWithLifecycle(initialValue = null)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        screenshot?.let {
+            com.ssintelligence.app.ui.common.ScreenshotThumbnail(
+                screenshot = it,
+                modifier = Modifier.size(48.dp),
+                contentDescription = "Search image: ${it.filename}",
+            )
+        }
+        Text(
+            text = "Finding shots that look like this",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onClear) {
+            Icon(Icons.Filled.Clear, contentDescription = "Remove search image")
+        }
+    }
 }

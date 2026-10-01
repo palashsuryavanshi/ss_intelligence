@@ -138,11 +138,12 @@ class HybridRankerTest {
     @Test
     fun `exact match floor holds under any re-tuning that keeps lexical dominant`() {
         // If someone re-tunes the weights, this documents the invariant that
-        // must survive: lexical + metadata at full must beat semantics at full.
+        // must survive: lexical + metadata at full must beat every soft
+        // signal at full combined.
         val weights = HybridWeights.Default
         val exactFloor = 100.0 * weights.lexical + 100.0 * weights.metadata
-        val semanticCeiling = 100.0 * weights.semantic
-        assertTrue(exactFloor > semanticCeiling)
+        val softCeiling = 100.0 * (weights.semantic + weights.visual + weights.entity)
+        assertTrue(exactFloor > softCeiling)
     }
 
     @Test
@@ -154,8 +155,11 @@ class HybridRankerTest {
 
     @Test
     fun `scores stay in range`() {
-        assertEquals(100.0, ranker.score(HybridSignals(100.0, 1.0, 1.0)), 0.001)
+        assertEquals(100.0, ranker.score(HybridSignals(100.0, 1.0, 1.0, 1.0, 1.0)), 0.001)
         assertEquals(0.0, ranker.score(HybridSignals(0.0, 0.0, 0.0)), 0.001)
+        // Partial signals land proportionally between the bounds.
+        val partial = ranker.score(HybridSignals(100.0, 1.0, 1.0))
+        assertTrue(partial > 0 && partial < 100.0)
     }
 
     @Test

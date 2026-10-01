@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,13 +28,20 @@ import androidx.navigation.navArgument
 import com.ssintelligence.app.BuildConfig
 import com.ssintelligence.app.ServiceLocator
 import com.ssintelligence.app.domain.usecase.ObserveOnboardingUseCase
+import com.ssintelligence.app.ui.collections.CollectionsScreen
+import com.ssintelligence.app.ui.compare.CompareScreenHost
 import com.ssintelligence.app.ui.debug.SearchDebugScreen
 import com.ssintelligence.app.ui.duplicates.DuplicatesScreen
 import com.ssintelligence.app.ui.detail.ScreenshotDetailScreen
+import com.ssintelligence.app.ui.explore.EntityScreen
+import com.ssintelligence.app.ui.explore.ExploreScreen
 import com.ssintelligence.app.ui.home.HomeScreen
 import com.ssintelligence.app.ui.onboarding.OnboardingScreen
 import com.ssintelligence.app.ui.screenshots.ScreenshotListScreen
+import com.ssintelligence.app.ui.search.ImagePickerScreen
 import com.ssintelligence.app.ui.search.SearchScreen
+import com.ssintelligence.app.ui.similar.SimilarScreen
+import com.ssintelligence.app.ui.timeline.TimelineScreen
 import com.ssintelligence.app.ui.settings.SettingsScreen
 import com.ssintelligence.app.ui.theme.SsIntelligenceTheme
 import kotlinx.coroutines.flow.first
@@ -47,6 +55,19 @@ private object Routes {
     const val DUPLICATES = "duplicates"
     const val SETTINGS = "settings"
     const val DETAIL = "detail/{screenshotId}"
+    const val TIMELINE = "timeline"
+    const val COLLECTIONS = "collections"
+    const val EXPLORE = "explore"
+    const val ENTITY = "entity/{entityId}"
+    const val SIMILAR = "similar/{screenshotId}"
+    const val COMPARE = "compare/{firstId}?secondId={secondId}"
+    const val PICK_IMAGE = "pick-image"
+
+    fun detail(id: Long) = "detail/$id"
+    fun entity(id: Long) = "entity/$id"
+    fun similar(id: Long) = "similar/$id"
+    fun compare(firstId: Long, secondId: Long? = null) =
+        if (secondId == null) "compare/$firstId" else "compare/$firstId?secondId=$secondId"
 
     /**
      * Debug-only route. The destination is only registered when
@@ -54,8 +75,6 @@ private object Routes {
      * the inspector's internal vocabulary is never reachable by a user (§46).
      */
     const val SEARCH_DEBUG = "search-debug"
-
-    fun detail(id: Long) = "detail/$id"
 }
 
 /**
@@ -133,7 +152,10 @@ private fun MainNavigation(locator: ServiceLocator) {
 
     // The first indexing run starts as soon as access exists (§7).
     LaunchedEffect(hasPermission) {
-        if (hasPermission) locator.indexingScheduler.requestIndexing()
+        if (hasPermission) {
+            locator.indexingScheduler.requestIndexing()
+            locator.requestIntelligenceCatchUp()
+        }
     }
 
     if (!hasPermission) {
@@ -156,10 +178,25 @@ private fun MainNavigation(locator: ServiceLocator) {
                 onNavigateToBrowse = { navController.navigate(Routes.BROWSE) },
                 onNavigateToDuplicates = { navController.navigate(Routes.DUPLICATES) },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
+                onNavigateToTimeline = { navController.navigate(Routes.TIMELINE) },
+                onNavigateToCollections = { navController.navigate(Routes.COLLECTIONS) },
+                onNavigateToExplore = { navController.navigate(Routes.EXPLORE) },
+                onOpenEntity = { entityId -> navController.navigate(Routes.entity(entityId)) },
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
             )
         }
-        composable(Routes.SEARCH) {
+        composable(
+            route = "${Routes.SEARCH}?preset={preset}",
+            arguments = listOf(
+                navArgument("preset") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) { entry ->
+            // The search-by-image pin lives here so the picker route can set
+            // it and the search screen can consume it across navigations.
+            var imageQuery by rememberSaveable { mutableStateOf<Long?>(null) }
             SearchScreen(
                 locator = locator,
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
@@ -168,6 +205,33 @@ private fun MainNavigation(locator: ServiceLocator) {
                     { navController.navigate(Routes.SEARCH_DEBUG) }
                 } else {
                     null
+                },
+                presetQuery = entry.arguments?.getString("preset").orEmpty(),
+                visualQueryId = imageQuery,
+                onPickImage = { navController.navigate(Routes.PICK_IMAGE) },
+            )
+            // The picker writes back through the same state on return.
+            navController.currentBackStackEntry?.savedStateHandle
+                ?.getStateFlow("picked_image", -1L)
+                ?.let { flow ->
+                    val picked by flow.collectAsStateWithLifecycle(initialValue = -1L)
+                    LaunchedEffect(picked) {
+                        if (picked >= 0) {
+                            imageQuery = picked
+                            navController.currentBackStackEntry
+                                ?.savedStateHandle?.set("picked_image", -1L)
+                        }
+                    }
+                }
+        }
+        composable(Routes.PICK_IMAGE) {
+            ImagePickerScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onPick = { id ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle?.set("picked_image", id)
+                    navController.popBackStack()
                 },
             )
         }
@@ -201,6 +265,76 @@ private fun MainNavigation(locator: ServiceLocator) {
                 // "Find similar" navigates within the same detail destination,
                 // so back returns to the previous screenshot, not to search.
                 onOpenScreenshot = { otherId -> navController.navigate(Routes.detail(otherId)) },
+                onCompare = { firstId -> navController.navigate(Routes.compare(firstId)) },
+                onExploreEntity = { entityId -> navController.navigate(Routes.entity(entityId)) },
+                onSearchDomain = { domain ->
+                    navController.navigate("${Routes.SEARCH}?preset=${java.net.URLEncoder.encode(domain, "UTF-8")}")
+                },
+                onFindVisuallySimilar = { navController.navigate(Routes.similar(id)) },
+            )
+        }
+        composable(Routes.TIMELINE) {
+            TimelineScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(Routes.COLLECTIONS) {
+            CollectionsScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(Routes.EXPLORE) {
+            ExploreScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenEntity = { entityId -> navController.navigate(Routes.entity(entityId)) },
+            )
+        }
+        composable(
+            route = Routes.ENTITY,
+            arguments = listOf(navArgument("entityId") { type = NavType.LongType }),
+        ) { entry ->
+            val entityId = entry.arguments?.getLong("entityId") ?: return@composable
+            EntityScreen(
+                locator = locator,
+                entityId = entityId,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(
+            route = Routes.SIMILAR,
+            arguments = listOf(navArgument("screenshotId") { type = NavType.LongType }),
+        ) { entry ->
+            val shotId = entry.arguments?.getLong("screenshotId") ?: return@composable
+            SimilarScreen(
+                locator = locator,
+                screenshotId = shotId,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(
+            route = Routes.COMPARE,
+            arguments = listOf(
+                navArgument("firstId") { type = NavType.LongType },
+                navArgument("secondId") {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                },
+            ),
+        ) { entry ->
+            val firstId = entry.arguments?.getLong("firstId") ?: return@composable
+            val secondId = entry.arguments?.getLong("secondId")?.takeIf { it >= 0 }
+            CompareScreenHost(
+                locator = locator,
+                firstId = firstId,
+                secondId = secondId,
+                navController = navController,
             )
         }
 

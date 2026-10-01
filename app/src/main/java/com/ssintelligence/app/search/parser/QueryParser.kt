@@ -30,6 +30,7 @@ class QueryParser(
     private val phoneParser: PhoneQueryParser = PhoneQueryParser(),
     private val priceParser: PriceQueryParser = PriceQueryParser(),
     private val contentTypeParser: ContentTypeParser = ContentTypeParser(),
+    private val visualParser: VisualQueryParser = VisualQueryParser(),
     private val keywordExtractor: KeywordExtractor = KeywordExtractor(),
     private val intentClassifier: IntentClassifier = IntentClassifier(),
 ) {
@@ -60,6 +61,9 @@ class QueryParser(
         val contentTypes = contentTypeParser.parse(trimmed, claimed)
         contentTypes.spans.forEach { claimed += it }
 
+        val visual = visualParser.parse(trimmed, claimed)
+        visual.spans.forEach { claimed += it }
+
         val keywords = keywordExtractor.extract(trimmed, claimed)
 
         // When a sentence contains more than one time expression the first one
@@ -79,6 +83,8 @@ class QueryParser(
             otpCodes = codes.map { it.value },
             contentTypes = contentTypes.types,
             timeRange = effectiveRange,
+            colors = visual.colors,
+            longScreenshotsOnly = visual.longOnly,
         )
 
         return draft.copy(intent = intentClassifier.classify(trimmed, draft))

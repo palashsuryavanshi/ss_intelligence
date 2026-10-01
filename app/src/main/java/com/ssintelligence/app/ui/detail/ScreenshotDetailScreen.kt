@@ -69,12 +69,18 @@ fun ScreenshotDetailScreen(
     screenshotId: Long,
     onBack: () -> Unit,
     onOpenScreenshot: (Long) -> Unit = {},
+    onCompare: (Long) -> Unit = {},
+    onExploreEntity: (Long) -> Unit = {},
+    onSearchDomain: (String) -> Unit = {},
+    onFindVisuallySimilar: () -> Unit = {},
     viewModel: ScreenshotDetailViewModel = viewModel(
         factory = ScreenshotDetailViewModel.Factory(locator, screenshotId)
     ),
 ) {
     val detail by viewModel.detail.collectAsStateWithLifecycle()
     val semantic by viewModel.semanticDetail.collectAsStateWithLifecycle()
+    val visual by viewModel.visualDetail.collectAsStateWithLifecycle()
+    val actions by viewModel.actions.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -169,6 +175,29 @@ fun ScreenshotDetailScreen(
                             onSelect = viewModel::onCategorySelected,
                             onClear = viewModel::onCategoryCleared,
                         )
+                    }
+                }
+            }
+
+            // What the image looks like, as extracted — palette, type, layout.
+            // Stated as observed attributes, never as recognized objects (§9).
+            val visualDetail = visual
+            if (visualDetail != null) {
+                item("visual") {
+                    InfoCard(title = "Visual") {
+                        val typeLabel = visualDetail.type.lowercase()
+                            .replace('_', ' ')
+                            .replaceFirstChar { it.uppercaseChar() }
+                        BulletRow("Type: $typeLabel")
+                        if (visualDetail.colors.isNotEmpty()) {
+                            BulletRow("Palette: ${visualDetail.colors.joinToString(", ")}")
+                        }
+                        val layoutLabel = visualDetail.layout.lowercase()
+                            .replace('_', ' ')
+                        if (layoutLabel != "none") {
+                            BulletRow("Layout: ${layoutLabel.replaceFirstChar { it.uppercaseChar() }}")
+                        }
+                        BulletRow(if (visualDetail.isDark) "Appearance: dark" else "Appearance: light")
                     }
                 }
             }
@@ -287,6 +316,24 @@ fun ScreenshotDetailScreen(
                         locator = locator,
                         ids = relatedIds,
                         onOpenScreenshot = onOpenScreenshot,
+                    )
+                }
+            }
+
+            // Contextual actions, generated from actual indexed data (§34).
+            // Each action only appears when it has somewhere to go: no host
+            // means no "More from this website".
+            if (actions.isNotEmpty()) {
+                item("actions-header") {
+                    SectionHeader("Search related")
+                }
+                item("actions") {
+                    ContextActions(
+                        actions = actions,
+                        onSimilar = onFindVisuallySimilar,
+                        onCompare = { onCompare(screenshotId) },
+                        onDomain = onSearchDomain,
+                        onEntity = onExploreEntity,
                     )
                 }
             }
@@ -443,6 +490,58 @@ private fun CategoryCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Contextual search actions (§34).
+ *
+ * One row of plain buttons, each labelled with its destination. The actions
+ * were resolved against the index before being shown, so every button works.
+ */
+@Composable
+private fun ContextActions(
+    actions: List<DetailAction>,
+    onSimilar: () -> Unit,
+    onCompare: () -> Unit,
+    onDomain: (String) -> Unit,
+    onEntity: (Long) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        actions.forEach { action ->
+            when (action) {
+                DetailAction.FindVisuallySimilar -> ActionRow(
+                    label = "Find visually similar",
+                    onClick = onSimilar,
+                )
+
+                DetailAction.Compare -> ActionRow(
+                    label = "Compare with another screenshot",
+                    onClick = onCompare,
+                )
+
+                is DetailAction.MoreFromWebsite -> ActionRow(
+                    label = "More from ${action.domain}",
+                    onClick = { onDomain(action.domain) },
+                )
+
+                is DetailAction.MoreAboutEntity -> ActionRow(
+                    label = "More about ${action.label}",
+                    onClick = { onEntity(action.entityId) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActionRow(label: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+        )
     }
 }
 

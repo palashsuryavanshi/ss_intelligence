@@ -25,7 +25,8 @@ import java.io.FileNotFoundException
  *
  * Failure policy: a failure in any single extraction step must not fail the
  * whole screenshot. Only a failure to read/decode the image is fatal, because
- * without an image there is nothing to index.
+ * without an image there is nothing to index. Visual analysis is an extraction
+ * step like any other: when it fails, the screenshot still indexes.
  */
 class ScreenshotProcessor(
     private val repository: ScreenshotRepository,
@@ -33,6 +34,11 @@ class ScreenshotProcessor(
     private val similarityDetector: ImageSimilarityDetector,
     private val metadataExtractor: MetadataExtractor,
     private val processingDispatcher: CoroutineDispatcher,
+    /**
+     * Visual analysis. Null in tests that only exercise the text path;
+     * wired in production through the service locator.
+     */
+    private val visualAnalyzer: com.ssintelligence.app.vision.BitmapVisualAnalyzer? = null,
 ) {
 
     /** Runs the full pipeline for one screenshot. Returns true when indexed. */
@@ -130,6 +136,17 @@ class ScreenshotProcessor(
         // and roughly double the table size for no additional value (§12).
         val lineBlocks = ocr.blocks.filter { it.level == OcrLevel.LINE }
 
+        // ---- 4b. Visual analysis (§4) ---------------------------------------
+        // Non-fatal by design: a downscaled decode, a hash, a palette and a
+        // type guess. When it fails the screenshot still indexes with its text.
+        val visual = visualAnalyzer?.let { analyzer ->
+            runCatching {
+                analyzer.analyze(uri, lineBlocks, screenshot.width, screenshot.height)
+            }.onFailure {
+                AppLog.w(TAG, "Visual analysis failed for screenshotId=${screenshot.id}")
+            }.getOrNull()
+        }
+
         // ---- 5. Persist (§20) ----------------------------------------------
         try {
             repository.saveResult(
@@ -144,6 +161,7 @@ class ScreenshotProcessor(
                     otps = extracted.otps,
                     contentHash = contentHash,
                     duplicateOfId = duplicateOf,
+                    visual = visual,
                 )
             )
         } catch (e: Exception) {

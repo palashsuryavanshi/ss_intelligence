@@ -11,6 +11,7 @@ import com.ssintelligence.app.data.repository.SemanticRepositoryImpl
 import com.ssintelligence.app.domain.model.IndexingScope
 import com.ssintelligence.app.domain.model.ThemeMode
 import com.ssintelligence.app.domain.repository.SearchHistoryRepository
+import com.ssintelligence.app.domain.repository.ProcessingMode
 import com.ssintelligence.app.domain.repository.SettingsRepository
 import com.ssintelligence.app.semantic.HashedNgramEmbeddingProvider
 import com.ssintelligence.app.semantic.ScreenshotCategory
@@ -502,6 +503,8 @@ class LocalSemanticSearchInstrumentedTest {
         override suspend fun setSearchHistoryEnabled(enabled: Boolean) = Unit
         override suspend fun isSemanticSearchEnabled(): Boolean = true
         override suspend fun setSemanticSearchEnabled(enabled: Boolean) = Unit
+        override suspend fun processingMode() = ProcessingMode.AUTOMATIC
+        override suspend fun setProcessingMode(mode: ProcessingMode) = Unit
     }
 
     private object DisabledSettings : SettingsRepository by EnabledSettings {

@@ -38,13 +38,43 @@ class HomeViewModel(
     private val _groups = MutableStateFlow(emptyList<SmartGroup>())
     val groups: StateFlow<List<SmartGroup>> = _groups.asStateFlow()
 
+    /**
+     * One quiet suggestion (§35): the most-referenced product entity, shown
+     * only when it covers enough screenshots to be worth opening. Inside the
+     * app, never a notification.
+     */
+    private val _suggestion = MutableStateFlow<TopEntitySuggestion?>(null)
+    val suggestion: StateFlow<TopEntitySuggestion?> = _suggestion.asStateFlow()
+
+    data class TopEntitySuggestion(
+        val entityId: Long,
+        val label: String,
+        val count: Int,
+    )
+
     init {
         refreshGroups()
+        refreshSuggestion()
     }
 
     fun refreshGroups() {
         viewModelScope.launch {
             _groups.value = runCatching { observeGroups() }.getOrDefault(emptyList())
+        }
+    }
+
+    fun refreshSuggestion() {
+        viewModelScope.launch {
+            val top = runCatching {
+                locator.screenshotRepository.topEntities(
+                    listOf(com.ssintelligence.app.graph.GraphEntityType.PRODUCT),
+                    minCount = SUGGESTION_MIN_COUNT,
+                    limit = 1,
+                )
+            }.getOrDefault(emptyList()).firstOrNull()
+            _suggestion.value = top?.let {
+                TopEntitySuggestion(it.entity.id, it.entity.displayName, it.screenshotCount)
+            }
         }
     }
 
@@ -54,6 +84,11 @@ class HomeViewModel(
 
     fun onStopIndexing() {
         locator.indexingScheduler.cancel()
+    }
+
+    private companion object {
+        /** A suggestion needs enough screenshots to be worth opening. */
+        const val SUGGESTION_MIN_COUNT = 5
     }
 
     class Factory(private val locator: ServiceLocator) : ViewModelProvider.Factory {

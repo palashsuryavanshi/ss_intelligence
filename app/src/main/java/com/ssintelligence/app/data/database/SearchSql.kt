@@ -71,6 +71,28 @@ internal object SearchSql {
     """
 
     /**
+     * Visual constraints: palette color and long-screenshot shape (§9, §25).
+     *
+     * Requires [VISUAL_JOIN] in the query. `dark`/`light` map to the
+     * brightness flag rather than the palette; any other color matches the
+     * extracted palette with delimiter guards so `red` cannot match
+     * inside another word. The aspect threshold mirrors
+     * `VisualAnalysis.LONG_ASPECT`.
+     */
+    const val VISUAL_JOIN = "LEFT JOIN screenshot_visuals v ON v.screenshot_id = s.id"
+
+    const val VISUAL = """
+        AND (:color IS NULL OR (
+            (:color = 'dark' AND v.is_dark = 1) OR
+            (:color = 'light' AND v.is_dark = 0) OR
+            (',' || v.colors || ',') LIKE '%,' || :color || ',%'
+        ))
+        AND (:longOnly = 0 OR (
+            s.width > 0 AND CAST(s.height AS REAL) / CAST(s.width AS REAL) >= 2.8
+        ))
+    """
+
+    /**
      * Cheap SQL-side pre-order for the candidate window.
      *
      * A filename that starts with the query is almost always what the user

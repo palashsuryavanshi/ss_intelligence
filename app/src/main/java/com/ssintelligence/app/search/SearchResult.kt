@@ -56,6 +56,21 @@ enum class MatchKind {
      * embedding value or a similarity number.
      */
     SEMANTIC,
+
+    /**
+     * Visually similar: shared palette or close perceptual hash (§54).
+     *
+     * The label says what matched ("Similar layout", "Blue tones"), never a
+     * Hamming distance or a claim about depicted objects.
+     */
+    VISUAL,
+
+    /**
+     * Shares an entity with the query ("Pixel 9a", "amazon.in") (§54).
+     *
+     * The label names the entity, grounding the match in filed data.
+     */
+    ENTITY,
 }
 
 /**
@@ -116,6 +131,12 @@ data class SearchRequest(
     val manualFilters: ManualFilters = ManualFilters(),
     val sortMode: SortMode = SortMode.RELEVANCE,
     val limit: Int = DEFAULT_LIMIT,
+    /**
+     * Search-by-image: rank by visual similarity to this screenshot (§7).
+     * Combined with the text query when both are present (multimodal), used
+     * alone for "find shots that look like this one".
+     */
+    val visualQueryId: Long? = null,
 ) {
     companion object {
         /**

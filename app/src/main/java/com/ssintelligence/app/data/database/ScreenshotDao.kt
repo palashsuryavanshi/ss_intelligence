@@ -350,6 +350,17 @@ interface ScreenshotDao {
     )
     suspend fun getPage(cursorDateAdded: Long, cursorId: Long, limit: Int): List<ScreenshotEntity>
 
+    /** Newest rows, one shot — feeds timeline, events and sequences. */
+    @Query(
+        """
+        SELECT * FROM screenshots s
+        WHERE s.status <> 'FAILED'
+        ORDER BY s.date_added DESC, s.id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun recentRows(limit: Int): List<ScreenshotEntity>
+
     // -------------------------------------------------------------- search
 
     /**
@@ -430,8 +441,10 @@ interface ScreenshotDao {
         """
         SELECT s.* FROM screenshots s
         JOIN screenshots_fts ON screenshots_fts.rowid = s.id
+        ${SearchSql.VISUAL_JOIN}
         WHERE screenshots_fts MATCH :ftsQuery
         ${SearchSql.STRUCTURED}
+        ${SearchSql.VISUAL}
         ${SearchSql.CANDIDATE_ORDER}
         """
     )
@@ -448,6 +461,8 @@ interface ScreenshotDao {
         domain: String?,
         otp: String?,
         filterTypes: String,
+        color: String?,
+        longOnly: Boolean,
         limit: Int,
     ): List<ScreenshotEntity>
 
@@ -463,8 +478,10 @@ interface ScreenshotDao {
         """
         SELECT s.* FROM screenshots s
         JOIN screenshots_fts ON screenshots_fts.rowid = s.id
+        ${SearchSql.VISUAL_JOIN}
         WHERE screenshots_fts MATCH :ftsQuery
         ${SearchSql.STRUCTURED}
+        ${SearchSql.VISUAL}
         ${SearchSql.CANDIDATE_ORDER}
         """
     )
@@ -481,6 +498,8 @@ interface ScreenshotDao {
         domain: String?,
         otp: String?,
         filterTypes: String,
+        color: String?,
+        longOnly: Boolean,
         limit: Int,
     ): List<ScreenshotEntity>
 
@@ -488,8 +507,10 @@ interface ScreenshotDao {
     @Query(
         """
         SELECT s.* FROM screenshots s
+        ${SearchSql.VISUAL_JOIN}
         WHERE 1 = 1
         ${SearchSql.STRUCTURED}
+        ${SearchSql.VISUAL}
         ORDER BY s.date_added DESC, s.id DESC
         LIMIT :limit
         """
@@ -504,6 +525,8 @@ interface ScreenshotDao {
         domain: String?,
         otp: String?,
         filterTypes: String,
+        color: String?,
+        longOnly: Boolean,
         limit: Int,
     ): List<ScreenshotEntity>
 
@@ -601,6 +624,9 @@ interface ScreenshotDao {
 
     @Query("SELECT * FROM extracted_otps WHERE screenshot_id = :id ORDER BY id")
     suspend fun otpsForScreenshot(id: Long): List<ExtractedOtpEntity>
+
+    @Query("SELECT * FROM ocr_blocks WHERE screenshot_id = :screenshotId AND level = 'LINE' ORDER BY id")
+    suspend fun blocksForScreenshot(screenshotId: Long): List<OcrBlockEntity>
 
     // ----------------------------------------------------------- maintenance
 

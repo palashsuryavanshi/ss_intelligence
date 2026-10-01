@@ -283,6 +283,7 @@ internal fun MatchKindDot(kind: MatchKind, modifier: Modifier = Modifier) {
         MatchKind.URL, MatchKind.PHONE -> MaterialTheme.colorScheme.secondary
         MatchKind.OTP -> MaterialTheme.colorScheme.error
         MatchKind.SEMANTIC -> MaterialTheme.colorScheme.tertiary
+        MatchKind.VISUAL, MatchKind.ENTITY -> MaterialTheme.colorScheme.secondary
         MatchKind.DATE, MatchKind.FILENAME, MatchKind.DUPLICATE -> MaterialTheme.colorScheme.outline
         MatchKind.TERM -> MaterialTheme.colorScheme.outlineVariant
     }

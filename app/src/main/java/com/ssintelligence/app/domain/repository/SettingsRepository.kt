@@ -33,4 +33,22 @@ interface SettingsRepository {
      */
     suspend fun isSemanticSearchEnabled(): Boolean
     suspend fun setSemanticSearchEnabled(enabled: Boolean)
+
+    /**
+     * Background intelligence processing mode (§62).
+     *
+     * Automatic runs catch-up work whenever; Charging Only waits for power;
+     * Manual means only explicit taps run the builders. Basic browsing and
+     * search work identically in every mode — this governs expensive
+     * background embedding only.
+     */
+    suspend fun processingMode(): ProcessingMode
+    suspend fun setProcessingMode(mode: ProcessingMode)
+}
+
+/** Background processing policy for expensive intelligence jobs. */
+enum class ProcessingMode(val label: String) {
+    AUTOMATIC("Automatic"),
+    CHARGING_ONLY("Charging only"),
+    MANUAL("Manual"),
 }

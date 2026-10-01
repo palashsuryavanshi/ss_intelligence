@@ -75,8 +75,20 @@ enum class EntityKind {
  */
 object EntityExtractor {
 
+    /**
+     * Order and booking codes, recognized by shape rather than by a model.
+     *
+     * Two details matter, both found on a real library:
+     *
+     * - The case-insensitive flag is **scoped to the keyword** (`(?i:…)`).
+     *   A global `(?i)` also made the code class match lowercase words, so
+     *   `order Protection` filed an ORDER entity named `Protection` on four
+     *   screenshots — which then showed up as a fabricated Timeline "event".
+     * - The code must contain a **digit**. Real codes do (`7QK2LP`, `ORD998877`);
+     *   English words do not. This is what separates a code from a label.
+     */
     private val orderContext = Regex(
-        """(?i)\b(?:order|booking|pnr|confirmation|reservation|transaction|awb|tracking)\b[\s:#.\-]*([A-Z0-9]{6,20})\b""",
+        """(?i:order|booking|pnr|confirmation|reservation|transaction|awb|tracking)[\s:#.\-]*([A-Z0-9]{6,20})\b""",
     )
 
     fun extract(document: ScreenshotDocument, phrases: List<String> = emptyList()): List<EntityRef> =
@@ -99,6 +111,8 @@ object EntityExtractor {
             document.dateTexts.forEach { add(EntityRef(EntityKind.DATE, it, it.lowercase())) }
             for (match in orderContext.findAll(document.ocrText)) {
                 val code = match.groupValues[1]
+                // A code without a digit is a label, not an identifier.
+                if (!code.any(Char::isDigit)) continue
                 val kind = if (match.value.lowercase().contains("book") || match.value.lowercase().contains("pnr")) {
                     EntityKind.BOOKING_NUMBER
                 } else {
