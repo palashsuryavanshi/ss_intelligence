@@ -47,6 +47,7 @@ class CompareBuilderTest {
             ExtractedPrice(i.toLong(), id, "$currency $amount", currency, amount)
         },
         otps = emptyList(),
+        receipt = null,
     )
 
     @Test

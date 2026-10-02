@@ -1,6 +1,7 @@
 package com.ssintelligence.app.actions
 
 import com.ssintelligence.app.assistant.SensitivityLevel
+import com.ssintelligence.app.domain.model.ExtractedReceipt
 import com.ssintelligence.app.domain.model.ExtractedUrl
 
 /**
@@ -24,6 +25,7 @@ class ActionCandidateGenerator {
         dates: List<Pair<Long, String?>>, // epoch millis to label
         prices: List<Pair<Double, String>>, // amount to currency
         hasOcrText: Boolean,
+        receipt: ExtractedReceipt? = null,
     ): List<ContextAction> {
         val out = mutableListOf<ContextAction>()
 
@@ -157,24 +159,30 @@ class ActionCandidateGenerator {
             )
         }
 
-        // Price actions — track in screenshots.
+        // Price actions — track in screenshots, with auto-extracted amount.
+        // If a receipt was extracted, pre-fill merchant, amount, date, category.
         for ((amount, currency) in prices.take(2)) {
+            val merchant = receipt?.merchant
+            val amount = receipt?.amount ?: amount
+            val currency = receipt?.currency ?: currency
+            val dateEpochDay = receipt?.date?.let { java.time.LocalDate.parse(it).toEpochDay() } ?: 0L
+            val category = receipt?.category
             out += ContextAction(
                 id = "track-$screenshotId-$amount",
                 type = ActionType.SAVE_EXPENSE,
-                title = "Track this price",
-                description = "$currency $amount",
+                title = "Save expense",
+                description = "${receipt?.merchant ?: "Expense"} — $currency $amount",
                 screenshotIds = listOf(screenshotId),
                 entityIds = emptyList(),
                 confirmation = ConfirmationLevel.CONFIRM,
                 permission = PermissionType.NONE,
                 sensitivity = SensitivityLevel.NORMAL,
                 payload = ActionPayload.Expense(
-                    merchant = null,
-                    amount = amount,
-                    currency = currency,
-                    dateEpochDay = 0,
-                    category = null,
+                    merchant = receipt?.merchant,
+                    amount = receipt?.amount ?: amount,
+                    currency = receipt?.currency ?: currency,
+                    dateEpochDay = receipt?.date?.let { java.time.LocalDate.parse(it).toEpochDay() } ?: 0L,
+                    category = receipt?.category,
                 ),
             )
         }

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 7,
-    "identityHash": "ee47aecc8413c929dfb96e14e7ba49c4",
+    "identityHash": "1f39336080a54f02b39588f36a7ddd69",
     "entities": [
       {
         "tableName": "screenshots",
@@ -548,6 +548,95 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_extracted_otps_screenshot_id` ON `${TABLE_NAME}` (`screenshot_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "screenshots",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "screenshot_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "extracted_receipts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `screenshot_id` INTEGER NOT NULL, `merchant` TEXT NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL, `date_epoch_day` INTEGER NOT NULL, `category` TEXT, `raw_text` TEXT NOT NULL, `created_at` INTEGER NOT NULL, FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "screenshotId",
+            "columnName": "screenshot_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "merchant",
+            "columnName": "merchant",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateEpochDay",
+            "columnName": "date_epoch_day",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rawText",
+            "columnName": "raw_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_extracted_receipts_screenshot_id",
+            "unique": false,
+            "columnNames": [
+              "screenshot_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_extracted_receipts_screenshot_id` ON `${TABLE_NAME}` (`screenshot_id`)"
           }
         ],
         "foreignKeys": [
@@ -2344,7 +2433,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ee47aecc8413c929dfb96e14e7ba49c4')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1f39336080a54f02b39588f36a7ddd69')"
     ]
   }
 }

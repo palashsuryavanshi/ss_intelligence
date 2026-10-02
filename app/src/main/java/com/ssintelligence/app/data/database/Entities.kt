@@ -218,6 +218,36 @@ data class ExtractedOtpEntity(
 )
 
 /**
+ * Receipt/invoice extracted from a screenshot (§12).
+ *
+ * Contains merchant, total amount, currency, date and category parsed from
+ * the OCR text. Stored separately so it can be queried for expense prefill.
+ */
+@Entity(
+    tableName = "extracted_receipts",
+    foreignKeys = [
+        ForeignKey(
+            entity = ScreenshotEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["screenshot_id"],
+            onDelete = ForeignKey.CASCADE,
+        )
+    ],
+    indices = [Index(value = ["screenshot_id"])],
+)
+data class ExtractedReceiptEntity(
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "id") val id: Long = 0L,
+    @ColumnInfo(name = "screenshot_id") val screenshotId: Long,
+    @ColumnInfo(name = "merchant") val merchant: String,
+    @ColumnInfo(name = "amount") val amount: Double,
+    @ColumnInfo(name = "currency") val currency: String,
+    @ColumnInfo(name = "date_epoch_day") val dateEpochDay: Long,
+    @ColumnInfo(name = "category") val category: String?,
+    @ColumnInfo(name = "raw_text") val rawText: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+)
+
+/**
  * Structured OCR geometry (§12).
  *
  * Boxes are normalized to 0..1000 so the schema is resolution independent and

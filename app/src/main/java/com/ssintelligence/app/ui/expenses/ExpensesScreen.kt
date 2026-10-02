@@ -22,8 +22,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Alignment.Horizontal
+import androidx.compose.ui.Alignment.Vertical
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -80,6 +87,11 @@ fun ExpensesScreen(
             )
             return@Scaffold
         }
+        val totalsByCategory = expenses.groupBy { it.category ?: "Other" }
+            .mapValues { (_, list) -> list.sumOf { it.amount } }
+        val totalAmount = expenses.sumOf { it.amount }
+        val currency = expenses.firstOrNull()?.currency ?: "INR"
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -88,6 +100,37 @@ fun ExpensesScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item("header") { SectionHeader("Saved from screenshots") }
+            item("summary") {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "Total: ${Currency.format(currency, totalAmount)}",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        if (totalsByCategory.isNotEmpty()) {
+                            val categorySummary = totalsByCategory.entries.joinToString(", ") { entry ->
+                                "${entry.key}: ${Currency.format(currency, entry.value)}"
+                            }
+                            Text(
+                                text = "By category: $categorySummary",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            item("list-header") { SectionHeader("Saved from screenshots") }
             items(expenses, key = { "expense-${it.id}" }) { expense ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),

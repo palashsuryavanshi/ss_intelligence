@@ -3,6 +3,7 @@ package com.ssintelligence.app.actions
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -137,6 +138,38 @@ class ActionExecutor(
         }
         context.startActivity(intent)
         return ActionResult(action.id, true, "Opening calendar")
+    }
+
+    /**
+     * Direct calendar write for automation rules (§29).
+     *
+     * Bypasses the system picker; requires WRITE_CALENDAR permission.
+     * Only used by automation rules where the user has already approved the rule.
+     */
+    suspend fun createCalendarEventDirect(
+        title: String,
+        startEpochMillis: Long,
+        endEpochMillis: Long?,
+        location: String?,
+        description: String?,
+    ): ActionResult {
+        return try {
+            val resolver = context.contentResolver
+            val values = ContentValues().apply {
+                put(CalendarContract.Events.TITLE, title)
+                put(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startEpochMillis)
+                endEpochMillis?.let { put(CalendarContract.EXTRA_EVENT_END_TIME, it) }
+                location?.let { put(CalendarContract.Events.EVENT_LOCATION, it) }
+                description?.let { put(CalendarContract.Events.DESCRIPTION, it) }
+                put(CalendarContract.Events.DTSTART, startEpochMillis)
+                endEpochMillis?.let { put(CalendarContract.Events.DTEND, it) }
+                put(CalendarContract.Events.HAS_ALARM, 1)
+            }
+            val uri = resolver.insert(CalendarContract.Events.CONTENT_URI, values)
+            ActionResult("calendar-direct", true, "Event created: $uri")
+        } catch (e: Exception) {
+            ActionResult("calendar-direct", false, "Failed to create event: ${e.message}")
+        }
     }
 
     private fun createReminder(action: ContextAction): ActionResult {

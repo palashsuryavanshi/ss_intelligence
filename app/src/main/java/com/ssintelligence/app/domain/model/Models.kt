@@ -89,6 +89,7 @@ data class ScreenshotDetail(
     val phones: List<ExtractedPhone>,
     val prices: List<ExtractedPrice>,
     val otps: List<ExtractedOtp>,
+    val receipt: ExtractedReceipt?,
 )
 
 /** Aggregate counts shown on the home screen. */
@@ -148,6 +149,8 @@ data class ProcessingResult(
      * disabled or failed — never fatal to the screenshot (§47 Phase 4).
      */
     val visual: com.ssintelligence.app.vision.VisualAnalysis? = null,
+    /** Receipt extracted from the screenshot, if any. */
+    val receipt: ExtractedReceipt? = null,
 )
 
 /** Structured OCR output preserved for future visual search (§12). */
@@ -169,3 +172,13 @@ data class DateCandidate(val rawText: String, val epochDay: Long, val hasYear: B
 data class PhoneCandidate(val rawText: String, val normalized: String, val country: String)
 data class PriceCandidate(val rawText: String, val currency: String, val amount: Double)
 data class OtpCandidate(val code: String)
+
+/** A receipt extracted from a screenshot (§12). */
+data class ExtractedReceipt(
+    val merchant: String,
+    val amount: Double,
+    val currency: String,
+    val date: String?,
+    val category: String?,
+    val rawText: String,
+)

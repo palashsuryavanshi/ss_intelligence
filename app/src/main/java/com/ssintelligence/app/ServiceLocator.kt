@@ -6,6 +6,7 @@ import androidx.work.WorkManager
 import com.ssintelligence.app.data.database.SsIntelligenceDatabase
 import com.ssintelligence.app.data.media.MediaStoreScreenshotSource
 import com.ssintelligence.app.data.media.ScreenshotSource
+import com.ssintelligence.app.actions.ActionExecutor
 import com.ssintelligence.app.actions.ActionRepository
 import com.ssintelligence.app.actions.ActionRepositoryImpl
 import com.ssintelligence.app.assistant.AssistantRepository
@@ -110,6 +111,10 @@ class ServiceLocator private constructor(context: Context) {
 
     val actionRepository: ActionRepository by lazy {
         ActionRepositoryImpl(database.actionDao())
+    }
+
+    val actionExecutor: ActionExecutor by lazy {
+        ActionExecutor(appContext)
     }
 
     val searchEngine: ScreenshotSearchEngine by lazy {

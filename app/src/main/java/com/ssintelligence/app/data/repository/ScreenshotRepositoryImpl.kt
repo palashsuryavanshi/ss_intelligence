@@ -6,6 +6,7 @@ import com.ssintelligence.app.data.database.ExtractedDateEntity
 import com.ssintelligence.app.data.database.ExtractedOtpEntity
 import com.ssintelligence.app.data.database.ExtractedPhoneEntity
 import com.ssintelligence.app.data.database.ExtractedPriceEntity
+import com.ssintelligence.app.data.database.ExtractedReceiptEntity
 import com.ssintelligence.app.data.database.ExtractedUrlEntity
 import com.ssintelligence.app.data.database.OcrBlockEntity
 import com.ssintelligence.app.data.database.ScreenshotDao
@@ -19,6 +20,7 @@ import com.ssintelligence.app.domain.model.ExtractedDate
 import com.ssintelligence.app.domain.model.ExtractedOtp
 import com.ssintelligence.app.domain.model.ExtractedPhone
 import com.ssintelligence.app.domain.model.ExtractedPrice
+import com.ssintelligence.app.domain.model.ExtractedReceipt
 import com.ssintelligence.app.domain.model.ExtractedUrl
 import com.ssintelligence.app.domain.model.IndexingStats
 import com.ssintelligence.app.domain.model.MediaImage
@@ -169,7 +171,23 @@ class ScreenshotRepositoryImpl(
             )
         }
 
-        return combine(dao.observeById(id), tables) { entity, t ->
+        val receiptFlow = dao.observeReceipts(id).map { list ->
+            val entity = list.firstOrNull()
+            if (entity == null) null else {
+                val dateStr = if (entity.dateEpochDay > 0) {
+                    java.time.LocalDate.ofEpochDay(entity.dateEpochDay).toString()
+                } else null
+                ExtractedReceipt(
+                    merchant = entity.merchant,
+                    amount = entity.amount,
+                    currency = entity.currency,
+                    date = dateStr,
+                    category = entity.category,
+                    rawText = entity.rawText,
+                )
+            }
+        }
+        return combine(dao.observeById(id), tables, receiptFlow) { entity, t, receipt ->
             entity?.let { row ->
                 ScreenshotDetail(
                     screenshot = row.toDomain(),
@@ -184,6 +202,7 @@ class ScreenshotRepositoryImpl(
                         ExtractedPrice(it.id, it.screenshotId, it.rawText, it.currency, it.amount)
                     },
                     otps = t.otps.map { ExtractedOtp(it.id, it.screenshotId, it.code) },
+                    receipt = receipt,
                 )
             }
         }
@@ -216,6 +235,20 @@ class ScreenshotRepositoryImpl(
 
     override suspend fun getDetail(id: Long): ScreenshotDetail? {
         val row = dao.getById(id) ?: return null
+        val receiptEntity = dao.receiptsForScreenshot(id).firstOrNull()
+        val receipt = receiptEntity?.let {
+            val dateStr = if (it.dateEpochDay > 0) {
+                java.time.LocalDate.ofEpochDay(it.dateEpochDay).toString()
+            } else null
+            ExtractedReceipt(
+                merchant = it.merchant,
+                amount = it.amount,
+                currency = it.currency,
+                date = dateStr,
+                category = it.category,
+                rawText = it.rawText,
+            )
+        }
         return ScreenshotDetail(
             screenshot = row.toDomain(),
             urls = dao.urlsForScreenshot(id).map { ExtractedUrl(it.id, it.screenshotId, it.url, it.host) },
@@ -229,6 +262,7 @@ class ScreenshotRepositoryImpl(
                 ExtractedPrice(it.id, it.screenshotId, it.rawText, it.currency, it.amount)
             },
             otps = dao.otpsForScreenshot(id).map { ExtractedOtp(it.id, it.screenshotId, it.code) },
+            receipt = receipt,
         )
     }
 
@@ -411,6 +445,7 @@ class ScreenshotRepositoryImpl(
             dao.deletePhones(result.screenshotId)
             dao.deletePrices(result.screenshotId)
             dao.deleteOtps(result.screenshotId)
+            dao.deleteReceipts(result.screenshotId)
 
             if (result.blocks.isNotEmpty()) {
                 dao.insertOcrBlocks(
@@ -473,6 +508,20 @@ class ScreenshotRepositoryImpl(
                             amount = it.amount,
                         )
                     }
+                )
+            }
+            if (result.receipt != null) {
+                dao.insertReceipt(
+                    ExtractedReceiptEntity(
+                        screenshotId = result.screenshotId,
+                        merchant = result.receipt.merchant,
+                        amount = result.receipt.amount,
+                        currency = result.receipt.currency,
+                        dateEpochDay = result.receipt.date?.let { java.time.LocalDate.parse(it).toEpochDay() } ?: 0L,
+                        category = result.receipt.category,
+                        rawText = result.receipt.rawText,
+                        createdAt = System.currentTimeMillis(),
+                    ),
                 )
             }
             if (result.otps.isNotEmpty()) {

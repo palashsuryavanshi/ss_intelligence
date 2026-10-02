@@ -2,9 +2,9 @@ package com.ssintelligence.app.automation
 
 import com.ssintelligence.app.actions.ActionRepository
 import com.ssintelligence.app.actions.StoredAutomationRule
-import kotlinx.coroutines.flow.first
 import com.ssintelligence.app.actions.ActionType
 import com.ssintelligence.app.actions.ConfirmationLevel
+import kotlinx.coroutines.flow.first
 
 /**
  * Local automation rules (§30–§35).
@@ -94,6 +94,7 @@ class AutomationEngine(
     private val repository: ActionRepository,
     private val screenshots: com.ssintelligence.app.domain.repository.ScreenshotRepository? = null,
     private val autonomousDao: com.ssintelligence.app.data.database.AutonomousDao? = null,
+    private val actionExecutor: com.ssintelligence.app.actions.ActionExecutor? = null,
 ) {
 
     /** Evaluates all enabled rules for one newly analyzed screenshot. */
@@ -150,64 +151,69 @@ class AutomationEngine(
         params: Map<String, String>,
         screenshotId: Long,
     ): String = when (action) {
-        RuleActionType.ADD_TO_COLLECTION -> {
-            val collection = params["collection"] ?: "Organized"
-            val repo = screenshots
-            if (repo == null) {
-                "Would add to $collection"
-            } else {
-                // Find-or-create, then add. The unique membership index makes
-                // re-adding a no-op, so re-running is idempotent (§69).
-                val existing = runCatching { repo.collections() }.getOrDefault(emptyList())
-                    .firstOrNull { it.name.equals(collection, ignoreCase = true) }
-                val id = existing?.id ?: runCatching { repo.createCollection(collection) }.getOrNull()
-                if (id == null) {
-                    "Could not create $collection"
-                } else {
-                    runCatching { repo.addToCollection(id, screenshotId) }
-                    "Added to $collection"
-                }
-            }
-        }
-
-        RuleActionType.ADD_TAG -> {
-            val tag = params["tag"] ?: "organized"
-            val dao = autonomousDao
-            if (dao == null) {
-                "Would tag $tag"
-            } else {
-                dao.insertTag(
-                    com.ssintelligence.app.data.database.ScreenshotTagEntity(
-                        screenshotId = screenshotId,
-                        label = tag.lowercase(),
-                        source = "automation",
-                    ),
-                )
-                "Tagged $tag"
-            }
-        }
-
+        RuleActionType.ADD_TO_COLLECTION -> executeAddToCollection(params, screenshotId)
+        RuleActionType.ADD_TAG -> executeAddTag(params, screenshotId)
         RuleActionType.ARCHIVE -> "Archived"
         RuleActionType.CREATE_REMINDER -> "Reminder saved on this device"
-        RuleActionType.CREATE_CALENDAR_EVENT -> "Calendar event created"
-        RuleActionType.SAVE_EXPENSE -> {
-            val amount = params["amount"]?.toDoubleOrNull()
-            val currency = params["currency"]
-            // An expense without an amount is not an expense — report honestly
-            // rather than filing a zero.
-            if (amount == null || currency == null) "Missing amount — needs review"
-            else "Expense saved on this device"
-        }
-
+        RuleActionType.CREATE_CALENDAR_EVENT -> executeCreateCalendarEvent(params)
+        RuleActionType.SAVE_EXPENSE -> executeSaveExpense(params)
         RuleActionType.SHOW_NOTIFICATION -> "Notification queued"
+        else -> throw IllegalArgumentException("Unknown action type: $action")
     }
 
-    /**
-     * Encodes conditions as `field|operator|value` joined by `;;`.
-     *
-     * Plain text, no JSON library needed: the values are developer- or
-     * user-typed tokens, never free prose, so the separators cannot collide.
-     */
+    private suspend fun executeAddToCollection(
+        params: Map<String, String>,
+        screenshotId: Long,
+    ): String {
+        val collection = params["collection"] ?: "Organized"
+        val repo = screenshots
+        if (repo == null) return "Would add to $collection"
+        val existing = runCatching { repo.collections() }.getOrDefault(emptyList())
+            .firstOrNull { it.name.equals(collection, ignoreCase = true) }
+        val id = existing?.id ?: runCatching { repo.createCollection(collection) }.getOrNull()
+        if (id == null) return "Could not create $collection"
+        runCatching { repo.addToCollection(id, screenshotId) }
+        return "Added to $collection"
+    }
+
+    private suspend fun executeAddTag(
+        params: Map<String, String>,
+        screenshotId: Long,
+    ): String {
+        val tag = params["tag"] ?: "organized"
+        val dao = autonomousDao
+        if (dao == null) return "Would tag $tag"
+        dao.insertTag(
+            com.ssintelligence.app.data.database.ScreenshotTagEntity(
+                screenshotId = screenshotId,
+                label = params["tag"]?.lowercase() ?: "organized",
+                source = "automation",
+            ),
+        )
+        return "Tagged $tag"
+    }
+
+    private suspend fun executeCreateCalendarEvent(
+        params: Map<String, String>,
+    ): String {
+        val title = params["title"] ?: "Event"
+        val start = params["start_epoch_millis"]?.toLongOrNull() ?: System.currentTimeMillis()
+        val end = params["end_epoch_millis"]?.toLongOrNull()
+        val location = params["location"]
+        val description = params["description"]
+        val result = actionExecutor?.createCalendarEventDirect(title, start, end, location, description)
+        return (result?.message as String?) ?: "Calendar event created (no executor)"
+    }
+
+    private suspend fun executeSaveExpense(
+        params: Map<String, String>,
+    ): String {
+        val amount = params["amount"]?.toDoubleOrNull()
+        val currency = params["currency"]
+        if (amount == null || currency == null) return "Missing amount — needs review"
+        return "Expense saved on this device"
+    }
+
     fun encodeConditions(conditions: List<RuleCondition>): String =
         conditions.joinToString(";;") { "${it.field}|${it.operator}|${it.value}" }
 

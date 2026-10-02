@@ -199,6 +199,7 @@ class ScreenshotDetailViewModel(
             dates = detailValue.dates.map { it.epochDay * 86_400_000L to it.rawText },
             prices = detailValue.prices.map { it.amount to it.currency },
             hasOcrText = ocr.isNotBlank(),
+            receipt = detailValue.receipt,
         )
     }
 

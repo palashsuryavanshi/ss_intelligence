@@ -134,6 +134,7 @@ class AutonomousAnalysisWorker(
             repository = locator.actionRepository,
             screenshots = locator.screenshotRepository,
             autonomousDao = locator.database.autonomousDao(),
+            actionExecutor = locator.actionExecutor,
         )
         val context = buildMap {
             put("visual_type", visual?.shotType ?: "")

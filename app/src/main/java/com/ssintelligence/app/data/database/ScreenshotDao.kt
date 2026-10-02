@@ -47,8 +47,12 @@ interface ScreenshotDao {
         deleteExtractedPhonesForAll()
         deleteExtractedPricesForAll()
         deleteOtpsForAll()
+        deleteReceiptsForAll()
         requeueAllRows(now)
     }
+
+    @Query("DELETE FROM extracted_receipts")
+    suspend fun deleteReceiptsForAll()
 
     @Query("SELECT * FROM screenshots WHERE id = :id")
     suspend fun getById(id: Long): ScreenshotEntity?
@@ -302,8 +306,14 @@ interface ScreenshotDao {
     @Query("DELETE FROM extracted_otps WHERE screenshot_id = :screenshotId")
     suspend fun deleteOtps(screenshotId: Long)
 
+    @Query("DELETE FROM extracted_receipts WHERE screenshot_id = :screenshotId")
+    suspend fun deleteReceipts(screenshotId: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOcrBlocks(blocks: List<OcrBlockEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertReceipt(receipt: ExtractedReceiptEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUrls(urls: List<ExtractedUrlEntity>)
@@ -616,6 +626,9 @@ interface ScreenshotDao {
     @Query("SELECT * FROM extracted_otps WHERE screenshot_id = :id ORDER BY id")
     fun observeOtps(id: Long): Flow<List<ExtractedOtpEntity>>
 
+    @Query("SELECT * FROM extracted_receipts WHERE screenshot_id = :id ORDER BY id")
+    fun observeReceipts(id: Long): Flow<List<ExtractedReceiptEntity>>
+
     // ------------------------------------------------- one-shot detail reads
 
     /**
@@ -636,6 +649,9 @@ interface ScreenshotDao {
 
     @Query("SELECT * FROM extracted_otps WHERE screenshot_id = :id ORDER BY id")
     suspend fun otpsForScreenshot(id: Long): List<ExtractedOtpEntity>
+
+    @Query("SELECT * FROM extracted_receipts WHERE screenshot_id = :id ORDER BY id")
+    suspend fun receiptsForScreenshot(id: Long): List<ExtractedReceiptEntity>
 
     @Query("SELECT * FROM ocr_blocks WHERE screenshot_id = :screenshotId AND level = 'LINE' ORDER BY id")
     suspend fun blocksForScreenshot(screenshotId: Long): List<OcrBlockEntity>

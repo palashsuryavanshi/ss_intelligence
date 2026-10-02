@@ -29,6 +29,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ExtractedPhoneEntity::class,
         ExtractedPriceEntity::class,
         ExtractedOtpEntity::class,
+        ExtractedReceiptEntity::class,
         OcrBlockEntity::class,
         SearchHistoryEntity::class,
         ScreenshotEmbeddingEntity::class,
@@ -253,6 +254,24 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_automation_executions_rule_id` ON `automation_executions` (`rule_id`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_automation_executions_screenshot_id` ON `automation_executions` (`screenshot_id`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `extracted_receipts` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `merchant` TEXT NOT NULL,
+                        `amount` REAL NOT NULL,
+                        `currency` TEXT NOT NULL,
+                        `date_epoch_day` INTEGER NOT NULL,
+                        `category` TEXT,
+                        `raw_text` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_extracted_receipts_screenshot_id` ON `extracted_receipts` (`screenshot_id`)")
             }
         }
 
