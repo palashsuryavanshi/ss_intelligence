@@ -38,7 +38,7 @@ class MigrationInstrumentedTest {
     @Before
     fun deleteLeftoverDatabases() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        for (name in listOf(TEST_DB, TEST_DB_V3, TEST_DB_V4, TEST_DB_V5)) {
+        for (name in listOf(TEST_DB, TEST_DB_V3, TEST_DB_V4, TEST_DB_V5, TEST_DB_V6)) {
             context.deleteDatabase(name)
         }
     }
@@ -292,10 +292,83 @@ class MigrationInstrumentedTest {
         migrated.close()
     }
 
+    @Test
+    fun migrateFromSixToSevenKeepsEverythingAndAddsActionTables() {
+        helper.createDatabase(TEST_DB_V6, 6).apply {
+            execSQL(
+                """
+                INSERT INTO screenshots (
+                    id, media_store_id, uri, filename, relative_path, date_added,
+                    date_modified, file_size, width, height, mime_type, ocr_text,
+                    content_hash, duplicate_of_id, status, processing_error,
+                    created_at, updated_at
+                ) VALUES (1, 42, 'content://x', 'Screenshot_1.png', 'Pictures/Screenshots',
+                    1700000000, 1700000000, 1024, 1080, 2400, 'image/png',
+                    'Google Pixel 9a', 'hash-1', NULL, 'COMPLETED', NULL, 0, 0)
+                """.trimIndent(),
+            )
+            execSQL(
+                "INSERT INTO assistant_conversations (title, created_at, updated_at) " +
+                    "VALUES ('Pixel Research', 0, 0)",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB_V6,
+            7,
+            true,
+            SsIntelligenceDatabase.MIGRATION_6_7,
+        )
+
+        // Screenshots and conversations survive.
+        migrated.query("SELECT filename FROM screenshots WHERE id = 1").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Screenshot_1.png", cursor.getString(0))
+        }
+        migrated.query("SELECT COUNT(*) FROM assistant_conversations").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+
+        // The action tables exist and are writable.
+        migrated.execSQL(
+            "INSERT INTO local_reminders (title, due_epoch_millis, screenshot_id, created_at) " +
+                "VALUES ('Check price', NULL, 1, 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO expense_records (screenshot_id, merchant, amount, currency, date_epoch_day, category, created_at) " +
+                "VALUES (1, 'Example Store', 2499.0, 'INR', 20000, 'Shopping', 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO action_history (action_type, screenshot_id, title, success, created_at) " +
+                "VALUES ('OPEN_URL', 1, 'Open example.com', 1, 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO automation_rules (name, trigger_type, condition_json, action_type, action_params_json, enabled, created_at) " +
+                "VALUES ('Receipt Organizer', 'RECEIPT_DETECTED', '', 'ADD_TO_COLLECTION', 'collection=Expenses', 1, 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO automation_executions (rule_id, screenshot_id, action_type, result, created_at) " +
+                "VALUES (1, 1, 'ADD_TO_COLLECTION', 'Added to Expenses', 0)",
+        )
+        migrated.query("SELECT COUNT(*) FROM expense_records").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+        migrated.query("SELECT COUNT(*) FROM automation_executions").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+
+        migrated.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         const val TEST_DB_V3 = "migration-test-v3.db"
         const val TEST_DB_V4 = "migration-test-v4.db"
         const val TEST_DB_V5 = "migration-test-v5.db"
+        const val TEST_DB_V6 = "migration-test-v6.db"
     }
 }

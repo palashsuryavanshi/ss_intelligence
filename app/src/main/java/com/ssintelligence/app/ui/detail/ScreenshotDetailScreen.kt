@@ -1,5 +1,8 @@
 package com.ssintelligence.app.ui.detail
 
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,9 +41,13 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssintelligence.app.ServiceLocator
+import com.ssintelligence.app.actions.ConfirmationLevel
+import com.ssintelligence.app.actions.ContextAction
+import com.ssintelligence.app.actions.toAndroidPermission
 import com.ssintelligence.app.domain.model.ExtractedDate
 import com.ssintelligence.app.domain.model.ExtractedPhone
 import com.ssintelligence.app.domain.model.ExtractedPrice
@@ -82,6 +90,46 @@ fun ScreenshotDetailScreen(
     val semantic by viewModel.semanticDetail.collectAsStateWithLifecycle()
     val visual by viewModel.visualDetail.collectAsStateWithLifecycle()
     val actions by viewModel.actions.collectAsStateWithLifecycle()
+    val contextActions by viewModel.contextActions.collectAsStateWithLifecycle()
+    val contextActionsEnabled by viewModel.contextActionsEnabled.collectAsStateWithLifecycle()
+    val actionResult by viewModel.actionResult.collectAsStateWithLifecycle()
+
+    var pendingAction by remember { mutableStateOf<ContextAction?>(null) }
+    val context = LocalContext.current
+
+    // One permission launcher for all contextual actions: the permission is
+    // requested only at the moment it becomes necessary (§28), and the action
+    // that triggered it is executed only after the grant.
+    var awaitingAction by remember { mutableStateOf<ContextAction?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        awaitingAction?.let { action ->
+            viewModel.executeAction(action, permissionGranted = granted)
+            awaitingAction = null
+        }
+    }
+
+    fun executeWithPermission(action: ContextAction) {
+        // Sensitive actions always go through confirmation first (§61).
+        if (action.confirmation != ConfirmationLevel.NONE) {
+            pendingAction = action
+            return
+        }
+        val permission = action.permission.toAndroidPermission()
+        if (permission == null) {
+            viewModel.executeAction(action, permissionGranted = true)
+            return
+        }
+        if (ContextCompat.checkSelfPermission(context, permission) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            viewModel.executeAction(action, permissionGranted = true)
+        } else {
+            awaitingAction = action
+            permissionLauncher.launch(permission)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -321,6 +369,42 @@ fun ScreenshotDetailScreen(
                 }
             }
 
+            // Phase 7 suggested actions, generated from the screenshot's actual
+            // detected content. Only the top actions show; the rest hide behind
+            // "More" so the screen never drowns in buttons (§81). Hidden
+            // entirely when the user turns contextual actions off in Settings.
+            if (contextActionsEnabled && contextActions.isNotEmpty()) {
+                item("suggested-actions-header") {
+                    SectionHeader("Suggested actions")
+                }
+                item("suggested-actions") {
+                    SuggestedActions(
+                        actions = contextActions,
+                        onExecute = ::executeWithPermission,
+                        pendingConfirmation = pendingAction,
+                        onConfirm = { viewModel.executeAction(it, permissionGranted = true) },
+                        onDismissConfirm = { pendingAction = null },
+                    )
+                }
+            }
+
+            // Action result feedback (§43): success or honest failure, never a
+            // fake success. Dismissed by tapping or by the next action.
+            actionResult?.let { result ->
+                item("action-result") {
+                    Text(
+                        text = result.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (result.success) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                        modifier = Modifier.clickable { viewModel.clearActionResult() },
+                    )
+                }
+            }
+
             // Contextual actions, generated from actual indexed data (§34).
             // Each action only appears when it has somewhere to go: no host
             // means no "More from this website".
@@ -551,7 +635,79 @@ private fun ActionRow(label: String, onClick: () -> Unit) {
 }
 
 /**
- * Horizontally scrolling related screenshots (§22).
+ * Phase 7 suggested actions (§4, §81).
+ *
+ * Shows the top three actions inline; the rest hide behind "More" so the
+ * screen never drowns in buttons. Every button carries a content description,
+ * and consequential actions always confirm before executing (§27).
+ */
+@Composable
+private fun SuggestedActions(
+    actions: List<ContextAction>,
+    onExecute: (ContextAction) -> Unit,
+    pendingConfirmation: ContextAction?,
+    onConfirm: (ContextAction) -> Unit,
+    onDismissConfirm: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val visible = if (expanded) actions else actions.take(3)
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        visible.forEach { action ->
+            TextButton(
+                onClick = { onExecute(action) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    Text(
+                        text = action.title,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    action.description?.let { description ->
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
+        if (actions.size > 3) {
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "Less" else "More (${actions.size - 3})")
+            }
+        }
+    }
+
+    pendingConfirmation?.let { action ->
+        AlertDialog(
+            onDismissRequest = onDismissConfirm,
+            title = { Text(action.title) },
+            text = {
+                Text(
+                    action.description ?: "This will act on this screenshot. " +
+                        "Nothing happens until you confirm.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onConfirm(action)
+                    onDismissConfirm()
+                }) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissConfirm) { Text("Cancel") }
+            },
+        )
+    }
+}
+/**
+ * Horizontally scrolling related screenshots.
  *
  * Ranked by embedding similarity plus shared entities, categories and hosts —
  * never just the neighbours in time.

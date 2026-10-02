@@ -82,6 +82,36 @@ class SettingsRepositoryImpl(
         store.edit { it[PROCESSING_MODE] = mode.name }
     }
 
+    override suspend fun isAutomationEnabled(): Boolean {
+        var enabled = true
+        store.edit { prefs -> enabled = prefs[AUTOMATION_ENABLED] ?: true }
+        return enabled
+    }
+
+    override suspend fun setAutomationEnabled(enabled: Boolean) {
+        store.edit { it[AUTOMATION_ENABLED] = enabled }
+    }
+
+    override suspend fun areContextActionsEnabled(): Boolean {
+        var enabled = true
+        store.edit { prefs -> enabled = prefs[CONTEXT_ACTIONS_ENABLED] ?: true }
+        return enabled
+    }
+
+    override suspend fun setContextActionsEnabled(enabled: Boolean) {
+        store.edit { it[CONTEXT_ACTIONS_ENABLED] = enabled }
+    }
+
+    override suspend fun isExpenseExtractionEnabled(): Boolean {
+        var enabled = true
+        store.edit { prefs -> enabled = prefs[EXPENSE_EXTRACTION_ENABLED] ?: true }
+        return enabled
+    }
+
+    override suspend fun setExpenseExtractionEnabled(enabled: Boolean) {
+        store.edit { it[EXPENSE_EXTRACTION_ENABLED] = enabled }
+    }
+
     private companion object {
         val THEME = stringPreferencesKey("theme_mode")
         val SCOPE = stringPreferencesKey("indexing_scope")
@@ -89,5 +119,8 @@ class SettingsRepositoryImpl(
         val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")
         val SEMANTIC_SEARCH_ENABLED = booleanPreferencesKey("semantic_search_enabled")
         val PROCESSING_MODE = stringPreferencesKey("processing_mode")
+        val AUTOMATION_ENABLED = booleanPreferencesKey("automation_enabled")
+        val CONTEXT_ACTIONS_ENABLED = booleanPreferencesKey("context_actions_enabled")
+        val EXPENSE_EXTRACTION_ENABLED = booleanPreferencesKey("expense_extraction_enabled")
     }
 }

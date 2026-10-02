@@ -52,6 +52,10 @@ fun SettingsScreen(
     onNavigateToInsights: () -> Unit = {},
     onNavigateToCleanup: () -> Unit = {},
     onNavigateToPrivacy: () -> Unit = {},
+    onNavigateToTasks: () -> Unit = {},
+    onNavigateToExpenses: () -> Unit = {},
+    onNavigateToActions: () -> Unit = {},
+    onNavigateToAutomation: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(locator)),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -65,6 +69,9 @@ fun SettingsScreen(
     val processingMode by viewModel.processingMode.collectAsStateWithLifecycle()
     val storage by viewModel.storage.collectAsStateWithLifecycle()
     val visualProgress by viewModel.visualRebuildProgress.collectAsStateWithLifecycle()
+    val automationEnabled by viewModel.automationEnabled.collectAsStateWithLifecycle()
+    val contextActionsEnabled by viewModel.contextActionsEnabled.collectAsStateWithLifecycle()
+    val expenseExtractionEnabled by viewModel.expenseExtractionEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -160,6 +167,22 @@ fun SettingsScreen(
                 onPrivacy = onNavigateToPrivacy,
                 onRebuildAutonomous = viewModel::onRebuildAutonomous,
                 onClearAutonomous = viewModel::onClearAutonomous,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingsHeader("Actions & Automation")
+            ActionsAutomationSection(
+                automationEnabled = automationEnabled,
+                onAutomationChange = viewModel::onAutomationEnabledChange,
+                contextActionsEnabled = contextActionsEnabled,
+                onContextActionsChange = viewModel::onContextActionsEnabledChange,
+                expenseExtractionEnabled = expenseExtractionEnabled,
+                onExpenseExtractionChange = viewModel::onExpenseExtractionEnabledChange,
+                onTasks = onNavigateToTasks,
+                onExpenses = onNavigateToExpenses,
+                onActions = onNavigateToActions,
+                onAutomation = onNavigateToAutomation,
+                onClearActionData = viewModel::onClearActionData,
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
@@ -292,6 +315,104 @@ private fun SettingsHeader(text: String) {
             .padding(top = 12.dp, bottom = 4.dp)
             .semantics { heading() },
     )
+}
+
+/**
+ * Actions and automation controls (§71).
+ *
+ * Each feature works independently and can be turned off. Critical and
+ * security-sensitive actions still require confirmation regardless of these
+ * preferences — the toggles govern suggestions and automation, never safety.
+ */
+@Composable
+private fun ActionsAutomationSection(
+    automationEnabled: Boolean,
+    onAutomationChange: (Boolean) -> Unit,
+    contextActionsEnabled: Boolean,
+    onContextActionsChange: (Boolean) -> Unit,
+    expenseExtractionEnabled: Boolean,
+    onExpenseExtractionChange: (Boolean) -> Unit,
+    onTasks: () -> Unit,
+    onExpenses: () -> Unit,
+    onActions: () -> Unit,
+    onAutomation: () -> Unit,
+    onClearActionData: () -> Unit,
+) {
+    var showClearConfirm by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ToggleRow(
+            label = "Automation",
+            description = "Let rules organize new screenshots automatically.",
+            checked = automationEnabled,
+            onCheckedChange = onAutomationChange,
+        )
+        ToggleRow(
+            label = "Contextual actions",
+            description = "Suggest actions from detected content on detail pages.",
+            checked = contextActionsEnabled,
+            onCheckedChange = onContextActionsChange,
+        )
+        ToggleRow(
+            label = "Expense extraction",
+            description = "Offer to save receipts as expenses.",
+            checked = expenseExtractionEnabled,
+            onCheckedChange = onExpenseExtractionChange,
+        )
+        TextButton(onClick = onTasks) { Text("View tasks") }
+        TextButton(onClick = onExpenses) { Text("View expenses") }
+        TextButton(onClick = onActions) { Text("Action history") }
+        TextButton(onClick = onAutomation) { Text("Manage automation") }
+        TextButton(onClick = { showClearConfirm = true }) { Text("Clear action data") }
+    }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Clear action data?") },
+            text = {
+                Text(
+                    "Removes reminders, expenses, action history and automation rules. " +
+                        "Your screenshots and index are untouched.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onClearActionData()
+                        showClearConfirm = false
+                    },
+                ) { Text("Clear") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun ToggleRow(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
 }
 
 /**

@@ -36,10 +36,14 @@ import com.ssintelligence.app.ui.detail.ScreenshotDetailScreen
 import com.ssintelligence.app.ui.explore.EntityScreen
 import com.ssintelligence.app.ui.explore.ExploreScreen
 import com.ssintelligence.app.ui.home.HomeScreen
+import com.ssintelligence.app.ui.actions.ActionCenterScreen
 import com.ssintelligence.app.ui.assistant.AssistantScreen
+import com.ssintelligence.app.ui.automation.AutomationScreen
 import com.ssintelligence.app.ui.cleanup.CleanupScreen
+import com.ssintelligence.app.ui.expenses.ExpensesScreen
 import com.ssintelligence.app.ui.insights.InsightsScreen
 import com.ssintelligence.app.ui.privacy.PrivacyScreen
+import com.ssintelligence.app.ui.tasks.TasksScreen
 import com.ssintelligence.app.ui.onboarding.OnboardingScreen
 import com.ssintelligence.app.ui.screenshots.ScreenshotListScreen
 import com.ssintelligence.app.ui.search.ImagePickerScreen
@@ -70,6 +74,10 @@ private object Routes {
     const val INSIGHTS = "insights"
     const val CLEANUP = "cleanup"
     const val PRIVACY = "privacy"
+    const val TASKS = "tasks"
+    const val EXPENSES = "expenses"
+    const val ACTIONS = "actions"
+    const val AUTOMATION = "automation"
 
     fun detail(id: Long) = "detail/$id"
     fun entity(id: Long) = "entity/$id"
@@ -108,7 +116,10 @@ private object Routes {
  * permission, requested only after the user has seen the explanation.
  */
 @Composable
-fun SsIntelligenceAppRoot(locator: ServiceLocator) {
+fun SsIntelligenceAppRoot(
+    locator: ServiceLocator,
+    startDestination: String? = null,
+) {
     val scope = rememberCoroutineScope()
     val onboarding = remember(locator) {
         ObserveOnboardingUseCase(locator.settingsRepository)
@@ -139,14 +150,14 @@ fun SsIntelligenceAppRoot(locator: ServiceLocator) {
                     },
                 )
 
-                true -> MainNavigation(locator)
+                true -> MainNavigation(locator, startDestination)
             }
         }
     }
 }
 
 @Composable
-private fun MainNavigation(locator: ServiceLocator) {
+private fun MainNavigation(locator: ServiceLocator, startDestination: String? = null) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -192,7 +203,7 @@ private fun MainNavigation(locator: ServiceLocator) {
 
     NavHost(
         navController = navController,
-        startDestination = Routes.HOME,
+        startDestination = startDestination ?: Routes.HOME,
         modifier = Modifier.fillMaxSize(),
     ) {
         composable(Routes.HOME) {
@@ -209,6 +220,10 @@ private fun MainNavigation(locator: ServiceLocator) {
                 onNavigateToInsights = { navController.navigate(Routes.INSIGHTS) },
                 onNavigateToCleanup = { navController.navigate(Routes.CLEANUP) },
                 onNavigateToPrivacy = { navController.navigate(Routes.PRIVACY) },
+                onNavigateToTasks = { navController.navigate(Routes.TASKS) },
+                onNavigateToExpenses = { navController.navigate(Routes.EXPENSES) },
+                onNavigateToActions = { navController.navigate(Routes.ACTIONS) },
+                onNavigateToAutomation = { navController.navigate(Routes.AUTOMATION) },
                 onOpenEntity = { entityId -> navController.navigate(Routes.entity(entityId)) },
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
             )
@@ -268,6 +283,9 @@ private fun MainNavigation(locator: ServiceLocator) {
                 locator = locator,
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
                 onAskSelection = { ids -> navController.navigate(Routes.assistant(selection = ids)) },
+                onCompareSelection = { ids ->
+                    if (ids.size >= 2) navController.navigate(Routes.compare(ids[0], ids[1]))
+                },
             )
         }
         composable(Routes.INSIGHTS) {
@@ -286,6 +304,33 @@ private fun MainNavigation(locator: ServiceLocator) {
         }
         composable(Routes.PRIVACY) {
             PrivacyScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.TASKS) {
+            TasksScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(Routes.EXPENSES) {
+            ExpensesScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(Routes.ACTIONS) {
+            ActionCenterScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(Routes.AUTOMATION) {
+            AutomationScreen(
                 locator = locator,
                 onBack = { navController.popBackStack() },
             )
@@ -326,6 +371,13 @@ private fun MainNavigation(locator: ServiceLocator) {
             SettingsScreen(
                 locator = locator,
                 onBack = { navController.popBackStack() },
+                onNavigateToInsights = { navController.navigate(Routes.INSIGHTS) },
+                onNavigateToCleanup = { navController.navigate(Routes.CLEANUP) },
+                onNavigateToPrivacy = { navController.navigate(Routes.PRIVACY) },
+                onNavigateToTasks = { navController.navigate(Routes.TASKS) },
+                onNavigateToExpenses = { navController.navigate(Routes.EXPENSES) },
+                onNavigateToActions = { navController.navigate(Routes.ACTIONS) },
+                onNavigateToAutomation = { navController.navigate(Routes.AUTOMATION) },
             )
         }
         composable(

@@ -15,6 +15,7 @@ import com.ssintelligence.app.indexing.VisualIndexWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -223,6 +224,61 @@ class SettingsViewModel(
         viewModelScope.launch {
             locator.autonomousRepository.clearAutonomousData()
             refreshStorage()
+        }
+    }
+
+    // ------------------------------------------------- Phase 7 automation
+
+    private val _automationEnabled = MutableStateFlow(true)
+    val automationEnabled: StateFlow<Boolean> = _automationEnabled.asStateFlow()
+
+    private val _contextActionsEnabled = MutableStateFlow(true)
+    val contextActionsEnabled: StateFlow<Boolean> = _contextActionsEnabled.asStateFlow()
+
+    private val _expenseExtractionEnabled = MutableStateFlow(true)
+    val expenseExtractionEnabled: StateFlow<Boolean> = _expenseExtractionEnabled.asStateFlow()
+
+    init {
+        refreshPhase7()
+    }
+
+    fun onAutomationEnabledChange(enabled: Boolean) {
+        viewModelScope.launch {
+            settings.setAutomationEnabled(enabled)
+            _automationEnabled.value = enabled
+        }
+    }
+
+    fun onContextActionsEnabledChange(enabled: Boolean) {
+        viewModelScope.launch {
+            settings.setContextActionsEnabled(enabled)
+            _contextActionsEnabled.value = enabled
+        }
+    }
+
+    fun onExpenseExtractionEnabledChange(enabled: Boolean) {
+        viewModelScope.launch {
+            settings.setExpenseExtractionEnabled(enabled)
+            _expenseExtractionEnabled.value = enabled
+        }
+    }
+
+    /**
+     * Clears locally generated action data — reminders, expenses, history and
+     * automation — without touching screenshots, the index or conversations (§54).
+     */
+    fun onClearActionData() {
+        viewModelScope.launch {
+            locator.actionRepository.clearAll()
+            refreshStorage()
+        }
+    }
+
+    private fun refreshPhase7() {
+        viewModelScope.launch {
+            _automationEnabled.value = settings.isAutomationEnabled()
+            _contextActionsEnabled.value = settings.areContextActionsEnabled()
+            _expenseExtractionEnabled.value = settings.isExpenseExtractionEnabled()
         }
     }
 

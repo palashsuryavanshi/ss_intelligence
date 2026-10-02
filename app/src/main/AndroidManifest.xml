@@ -42,6 +42,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Internal deep links (§56): ssi://screenshot/{id}, ssi://entity/{id},
+                 ssi://collection/{id}, ssi://search, ssi://assistant, ssi://browse,
+                 ssi://insights. Handled in-app; never parsed as arbitrary URLs. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="ssi" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- WorkManager on-demand initialization (configured in SsIntelligenceApp) -->

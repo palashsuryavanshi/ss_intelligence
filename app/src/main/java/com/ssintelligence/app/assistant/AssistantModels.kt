@@ -68,6 +68,30 @@ sealed interface AssistantAction {
     data object Compare : AssistantAction
     data class AddToCollection(val name: String) : AssistantAction
     data object ViewSources : AssistantAction
+
+    /**
+     * Phase 7 action cards (§76): the assistant proposes, the user confirms,
+     * and only then does anything execute. The card carries a typed command,
+     * never free text.
+     */
+    data class ProposeAction(
+        val label: String,
+        val command: AssistantActionRequest,
+    ) : AssistantAction
+}
+
+/**
+ * A typed action command the assistant may propose (§59).
+ *
+ * No AI-generated text ever reaches an Android API directly: every command is
+ * validated before execution, and consequential ones require confirmation.
+ */
+sealed interface AssistantActionRequest {
+    data class CreateReminder(val title: String, val dueEpochMillis: Long?) : AssistantActionRequest
+    data class SaveExpense(val merchant: String?, val amount: Double, val currency: String) : AssistantActionRequest
+    data class AddToCalendar(val title: String, val startEpochMillis: Long) : AssistantActionRequest
+    data class CreateCollection(val name: String) : AssistantActionRequest
+    data class OpenUrl(val url: String) : AssistantActionRequest
 }
 
 /** The validated, source-anchored result of one user turn. */

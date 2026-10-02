@@ -49,8 +49,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ScreenshotTagEntity::class,
         SuggestionEntity::class,
         ArchiveStateEntity::class,
+        LocalReminderEntity::class,
+        ExpenseRecordEntity::class,
+        ActionHistoryEntity::class,
+        AutomationRuleEntity::class,
+        AutomationExecutionEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class SsIntelligenceDatabase : RoomDatabase() {
@@ -70,6 +75,8 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
     abstract fun assistantDao(): AssistantDao
 
     abstract fun autonomousDao(): AutonomousDao
+
+    abstract fun actionDao(): ActionDao
 
     companion object {
         const val NAME = "ss_intelligence.db"
@@ -155,6 +162,97 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_screenshot_categories_category` " +
                         "ON `screenshot_categories` (`category`)",
                 )
+            }
+        }
+
+        /**
+         * v6 → v7 adds the contextual action and automation layer.
+         *
+         * Reminders, expenses, action history, automation rules and their
+         * executions are all derived from the existing index, so the migration
+         * is purely additive.
+         */
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `local_reminders` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `due_epoch_millis` INTEGER,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_local_reminders_screenshot_id` ON `local_reminders` (`screenshot_id`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `expense_records` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `merchant` TEXT,
+                        `amount` REAL NOT NULL,
+                        `currency` TEXT NOT NULL,
+                        `date_epoch_day` INTEGER NOT NULL,
+                        `category` TEXT,
+                        `created_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_expense_records_screenshot_id` ON `expense_records` (`screenshot_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_expense_records_date_epoch_day` ON `expense_records` (`date_epoch_day`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `action_history` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `action_type` TEXT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `success` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_action_history_screenshot_id` ON `action_history` (`screenshot_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_action_history_created_at` ON `action_history` (`created_at`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `automation_rules` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `trigger_type` TEXT NOT NULL,
+                        `condition_json` TEXT NOT NULL,
+                        `action_type` TEXT NOT NULL,
+                        `action_params_json` TEXT NOT NULL,
+                        `enabled` INTEGER NOT NULL,
+                        `created_at` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_automation_rules_enabled` ON `automation_rules` (`enabled`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `automation_executions` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `rule_id` INTEGER NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `action_type` TEXT NOT NULL,
+                        `result` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`rule_id`) REFERENCES `automation_rules`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_automation_executions_rule_id` ON `automation_executions` (`rule_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_automation_executions_screenshot_id` ON `automation_executions` (`screenshot_id`)")
             }
         }
 
@@ -448,7 +546,10 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
 
         fun build(context: Context): SsIntelligenceDatabase =
             Room.databaseBuilder(context.applicationContext, SsIntelligenceDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
+                    MIGRATION_5_6, MIGRATION_6_7,
+                )
                 // No destructive fallback: losing an index silently would be
                 // worse than a visible error. "Clear Index" in Settings is the
                 // explicit recovery path.

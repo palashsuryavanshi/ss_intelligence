@@ -49,6 +49,19 @@ insights; dedicated Insights, Cleanup and Privacy centers make the derived organ
 inspectable; and the assistant understands the detected structures ("Show my shopping
 sessions", "Which screenshots are probably duplicates?").
 
+Phase 7 turns understanding into action. Every detail page shows suggested actions
+generated from the screenshot's actual detected content — open a URL, call or copy a
+phone number, email an address, open a location in Maps, add a date to the calendar,
+create a reminder, track a price as an expense. Each action is a typed, validated command:
+harmless ones run immediately, consequential ones confirm first, sensitive ones always
+confirm. Local automation rules organize new screenshots as they arrive — receipts to
+Expenses, travel to Travel — each enableable from a template or described in plain words,
+each firing at most once per screenshot, each recorded in an execution history. Reminders,
+expenses, tasks, action history and automation all live in local tables that reference
+screenshots by id and never copy images. No action runs automatically without the user's
+rule, no call/message/share/delete is ever automatic, and the app still holds no
+`INTERNET` permission.
+
 ---
 
 ## Table of contents
@@ -69,6 +82,7 @@ sessions", "Which screenshots are probably duplicates?").
 - [Organization](#organization)
 - [Assistant](#assistant)
 - [Autonomous organization](#autonomous-organization)
+- [Actions and automation](#actions-and-automation)
 - [Performance notes](#performance-notes)
 - [Accessibility](#accessibility)
 - [Logging](#logging)
@@ -226,7 +240,16 @@ Everything below was run on an emulator (API 36 / SDK 37) rather than assumed:
   purchase", never "purchase completed"; the cleanup center surfaces near-duplicate and
   information-duplicate suggestions as reviewable questions; the privacy center reports
   actual metrics with cloud uploads at `0 (no INTERNET permission)`
-- 415 unit tests and 97 instrumented tests pass; release build succeeds under R8 with no
+- Phase 7 verified on-device: the Automation screen listed four templates and enabling
+  "Receipt Organizer" created a persisted, toggleable rule; the autonomous worker derived
+  83 topics, 61 sessions and 8 events from the real library; a detail page showed
+  "Suggested actions" (copy, ask, and — for a screenshot containing an OCR-spaced email
+  address — "Email oggytheboss069@protonmail.com"); tapping it showed the confirmation
+  dialog, and confirming opened Android's own app chooser (Proton Mail / Thunderbird),
+  proving the intent-delegation chain end to end; tapping "Copy extracted text" surfaced a
+  real validator rejection ("Action payload is incomplete") because the action carried an
+  empty payload — fixed by carrying the actual OCR text, with a regression test
+- 439 unit tests and 98 instrumented tests pass; release build succeeds under R8 with no
   `INTERNET` permission
 
 Five bugs were found only by running this on a device, and all are now fixed and covered by
@@ -300,7 +323,7 @@ validated a schema the current migration code never produced.
 ./gradlew connectedDebugAndroidTest  # Room + full search engine, requires a device/emulator
 ```
 
-**415 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
+**439 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
 screenshot heuristics, FTS query construction, the whole Phase 2 search layer (query parser
 and each sub-parser, intent classification, ranker, snippets, currency rendering), the
 Phase 3 semantic layer (deterministic embeddings, concept expansion, hybrid scoring,
@@ -309,13 +332,15 @@ Phase 4 layers (perceptual hashing, palette analysis, layout geometry, screensho
 classification, entity normalization, product-naming rules, graph building, comparison, the
 visual query parser), the Phase 5 assistant (intent detection, entity and price
 extraction, temporal windows, pronoun resolution across turns, normalized evidence
-ranking, answer grounding, and the anti-hallucination validator), and the Phase 6
+ranking, answer grounding, and the anti-hallucination validator), the Phase 6
 autonomous engine (topic, session, event, importance, lifecycle and suggestion detection,
-including the evidence-aware language rules). The search, semantic, vision, graph,
-assistant and autonomous layers are deliberately free of Android dependencies so they
-are testable as plain JVM code.
+including the evidence-aware language rules), and the Phase 7 layers (action generation
+from detected content, action ranking, validation rules, automation conditions, loop
+protection, condition/param encoding round-trips, and the automation safety boundaries).
+The search, semantic, vision, graph, assistant, autonomous, action and automation layers
+are deliberately free of Android dependencies so they are testable as plain JVM code.
 
-**97 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
+**98 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
 search, search ranking, filters, duplicate lookup, the pending queue, stale-work recovery,
 incremental re-indexing, keyset pagination, index rebuild and OTP isolation from search),
 both schema migrations — all three, from v1, v2 and v3 — the complete Phase 2 engine against a
@@ -452,7 +477,7 @@ Notes:
 
 ## Database schema
 
-Room, version 5, with exported schemas in `app/schemas/`.
+Room, version 7, with exported schemas in `app/schemas/`.
 
 ### `screenshots`
 
@@ -512,7 +537,7 @@ is never synced anywhere.
 
 ### Schema version
 
-`version = 6`, with five explicit migrations:
+`version = 7`, with six explicit migrations:
 
 | Migration | Adds |
 |---|---|
@@ -521,6 +546,7 @@ is never synced anywhere.
 | `MIGRATION_3_4` | `screenshot_visuals`, `graph_entities`, `graph_relations`, `collections`, `collection_members` |
 | `MIGRATION_4_5` | `assistant_conversations`, `assistant_messages`, `assistant_evidence`, `memory_snapshots`, `memory_snapshot_items` |
 | `MIGRATION_5_6` | `topics`, `sessions`, `events`, `screenshot_tags`, `suggestions`, `archive_state` |
+| `MIGRATION_6_7` | `local_reminders`, `expense_records`, `action_history`, `automation_rules`, `automation_executions` |
 
 There is deliberately **no destructive fallback**: silently dropping a user's index because a
 version changed is exactly the failure mode the explicit "Clear index" control exists to
@@ -1274,6 +1300,87 @@ The Phase 5 assistant understands the detected structures: "Show my shopping ses
 "What travel plans have I saved?", "Which screenshots are probably duplicates?". The
 organization query path reads the same derived tables the insights center shows, so the
 assistant and the UI never disagree about what was detected.
+
+---
+
+## Actions and automation
+
+Phase 7 turns understanding into action. Every detail page shows suggested actions
+generated from the screenshot's actual detected content — and every action is a typed,
+validated command, never a free-form string reaching an Android API.
+
+### Contextual actions
+
+`ActionCandidateGenerator` builds actions only from data the pipeline extracted: a URL
+action exists because a URL was found, a phone action because a phone number was found.
+An action that cannot apply is never generated. Candidates rank by specificity — a URL
+action outranks a generic copy — and only the top three show inline, the rest behind
+"More".
+
+Execution goes through `ActionExecutor`, which uses standard Android intents
+(`ACTION_VIEW`, `ACTION_DIAL`, `ACTION_SENDTO`, `ACTION_INSERT`) so the user's preferred
+handler is chosen by the system, never hardcoded. The dialer intent pre-fills the number
+but never places a call by itself; the calendar intent opens the system calendar app,
+which owns the write.
+
+### Confirmation and validation
+
+`ActionValidator` is the safety boundary. Every action passes through it before it can
+be shown or executed: required fields present, payload well-formed, permission granted
+where needed, sensitivity matched to confirmation level. A highly sensitive action
+without confirmation fails validation outright.
+
+Consequential actions always confirm first ("This will act on this screenshot. Nothing
+happens until you confirm."); sensitive ones always confirm. The result — success or
+honest failure — is reported back and recorded in the action history. A missing handler
+(no browser, no dialer) reports "No app available", never a fake success.
+
+No runtime permission is claimed where none is needed: intent-delegated actions carry
+`PermissionType.NONE` because the receiving system app owns the permission. Requesting
+`WRITE_CALENDAR` for a calendar insert intent would ask for something the app never
+uses. Direct API actions, if added later, carry the real permission and are requested
+only at the moment they become necessary.
+
+### Expenses, reminders and tasks
+
+Receipts offer "Save expense" with merchant, amount, currency, date and category —
+confirmed before saving, editable and deletable after. Dates offer calendar events and
+reminders. Reminders and expenses reference their source screenshots and never become
+notifications without permission. The Tasks screen merges scheduled reminders with
+suggested review items, each state a word (Suggested, Scheduled, Completed, Dismissed).
+
+### Automation
+
+`AutomationEngine` evaluates typed local rules against newly analyzed screenshots:
+triggers (receipt detected, price detected, entity detected…), structured conditions
+(`merchant == Example Store`), and safe actions (add to collection, add tag, archive,
+save expense). Rules fire at most once per screenshot — the execution table is the
+loop protection — and re-running is idempotent, because collection membership is unique.
+
+What automation may never do is structural, not promised: calls, messages, sharing and
+deletion are excluded from automatic execution by the safety validator, so no rule can
+ever perform them, however it is written. Calendar events and notifications are also
+excluded from automatic runs. Every execution is recorded with its rule, screenshot,
+result and timestamp.
+
+Rules come from templates (Receipt Organizer, Travel Organizer, Price Research,
+Important Documents) or are described in plain words ("Whenever I screenshot a receipt,
+put it in my Expenses collection") and converted deterministically — keyword matching,
+not a model — into a typed rule the user reviews before enabling. A master switch in
+Settings disables all automation at once; contextual actions, expense extraction and
+action confirmations each have their own independent toggle.
+
+### Entry points
+
+- **Detail page** — "Suggested actions" from detected content, top three inline.
+- **Browse** — long-press to multi-select, then Ask, Compare or Create collection.
+- **Home and Settings** — Tasks, Expenses, Actions (history), Automation.
+- **Assistant** — action cards ("Create reminder", "Save expense", "Add to
+  calendar") proposed from the user's words, confirmed before executing, reported
+  from the actual result.
+- **Launcher shortcuts and deep links** — `ssi://search`, `ssi://assistant`,
+  `ssi://browse`, `ssi://insights`, `ssi://screenshot/{id}`, `ssi://entity/{id}`.
+  Only known hosts are recognized; everything else falls back to home.
 
 ---
 

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher shortcuts (§55): Search, Ask, Recent, Insights. Each deep-links to
+  the matching in-app destination; no new permissions, no background services.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="search"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_search"
+        android:shortcutLongLabel="@string/shortcut_search">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.ssintelligence.app"
+            android:targetClass="com.ssintelligence.app.MainActivity"
+            android:data="ssi://search" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="ask"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_ask"
+        android:shortcutLongLabel="@string/shortcut_ask">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.ssintelligence.app"
+            android:targetClass="com.ssintelligence.app.MainActivity"
+            android:data="ssi://assistant" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="recent"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_recent"
+        android:shortcutLongLabel="@string/shortcut_recent">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.ssintelligence.app"
+            android:targetClass="com.ssintelligence.app.MainActivity"
+            android:data="ssi://browse" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="insights"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_insights"
+        android:shortcutLongLabel="@string/shortcut_insights">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.ssintelligence.app"
+            android:targetClass="com.ssintelligence.app.MainActivity"
+            android:data="ssi://insights" />
+    </shortcut>
+</shortcuts>

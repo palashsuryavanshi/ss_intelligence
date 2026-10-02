@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,12 +27,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,9 +43,83 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssintelligence.app.ServiceLocator
+import com.ssintelligence.app.assistant.AssistantAction
+import com.ssintelligence.app.assistant.AssistantActionRequest
 import com.ssintelligence.app.assistant.AssistantResponse
 import com.ssintelligence.app.ui.common.ScreenshotThumbnail
 import com.ssintelligence.app.ui.common.DateFormats
+import kotlinx.coroutines.launch
+
+/**
+ * Executes a confirmed assistant action proposal (§77).
+ *
+ * Each typed command maps to exactly one repository write or system intent.
+ * The result landing in the action history is what the next answer reports —
+ * so "I added the event" is only ever said after Android accepted the intent.
+ */
+private suspend fun executeProposal(
+    locator: ServiceLocator,
+    proposal: AssistantAction.ProposeAction,
+    response: AssistantResponse,
+) {
+    val firstId = response.sources.firstOrNull()?.screenshotId ?: return
+    val executor = com.ssintelligence.app.actions.ActionExecutor(locator.toApplicationContext())
+    when (val command = proposal.command) {
+        is AssistantActionRequest.CreateReminder -> {
+            locator.actionRepository.createReminder(command.title, command.dueEpochMillis, firstId)
+            locator.actionRepository.recordAction("CREATE_REMINDER", firstId, command.title, true)
+        }
+
+        is AssistantActionRequest.SaveExpense -> {
+            locator.actionRepository.saveExpense(
+                firstId, command.merchant, command.amount, command.currency,
+                java.time.LocalDate.now().toEpochDay(), null,
+            )
+            locator.actionRepository.recordAction("SAVE_EXPENSE", firstId, "Saved expense", true)
+        }
+
+        is AssistantActionRequest.AddToCalendar -> {
+            executor.execute(
+                com.ssintelligence.app.actions.ContextAction(
+                    id = "assistant-calendar",
+                    type = com.ssintelligence.app.actions.ActionType.CREATE_CALENDAR_EVENT,
+                    title = command.title,
+                    description = null,
+                    screenshotIds = listOf(firstId),
+                    entityIds = emptyList(),
+                    confirmation = com.ssintelligence.app.actions.ConfirmationLevel.CONFIRM,
+                    permission = com.ssintelligence.app.actions.PermissionType.NONE,
+                    sensitivity = com.ssintelligence.app.assistant.SensitivityLevel.NORMAL,
+                    payload = com.ssintelligence.app.actions.ActionPayload.CalendarEvent(
+                        command.title, command.startEpochMillis, null, null, null,
+                    ),
+                ),
+            )
+        }
+
+        is AssistantActionRequest.CreateCollection -> {
+            locator.screenshotRepository.createCollection(command.name)
+            locator.actionRepository.recordAction("CREATE_COLLECTION", firstId, command.name, true)
+        }
+
+        is AssistantActionRequest.OpenUrl -> {
+            executor.execute(
+                com.ssintelligence.app.actions.ContextAction(
+                    id = "assistant-url",
+                    type = com.ssintelligence.app.actions.ActionType.OPEN_URL,
+                    title = command.url,
+                    description = null,
+                    screenshotIds = listOf(firstId),
+                    entityIds = emptyList(),
+                    confirmation = com.ssintelligence.app.actions.ConfirmationLevel.NONE,
+                    permission = com.ssintelligence.app.actions.PermissionType.NONE,
+                    sensitivity = com.ssintelligence.app.assistant.SensitivityLevel.NORMAL,
+                    payload = com.ssintelligence.app.actions.ActionPayload.Url(command.url),
+                ),
+            )
+        }
+    }
+}
 
 /**
  * The assistant screen (§39).
@@ -65,6 +142,7 @@ fun AssistantScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     // An anchored or selected question is asked immediately, so "Ask about this
     // screenshot" behaves like opening a chat that already knows the subject.
@@ -143,6 +221,13 @@ fun AssistantScreen(
                         AnswerCard(
                             response = turn.response,
                             onOpenScreenshot = onOpenScreenshot,
+                            onActionConfirmed = { proposal ->
+                                turn.response?.let { response ->
+                                    scope.launch {
+                                        executeProposal(locator, proposal, response)
+                                    }
+                                }
+                            },
                         )
                     }
                 }
@@ -197,6 +282,7 @@ fun AssistantScreen(
 private fun AnswerCard(
     response: AssistantResponse?,
     onOpenScreenshot: (Long) -> Unit,
+    onActionConfirmed: (AssistantAction.ProposeAction) -> Unit,
 ) {
     if (response == null) {
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -264,6 +350,36 @@ private fun AnswerCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+            }
+            // Phase 7 action cards (§76): the assistant proposes, the user
+            // confirms, and only then does anything execute.
+            val proposals = response.actions.filterIsInstance<AssistantAction.ProposeAction>()
+            if (proposals.isNotEmpty()) {
+                var confirmed by remember { mutableStateOf<AssistantAction.ProposeAction?>(null) }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    proposals.forEach { proposal ->
+                        AssistChip(
+                            onClick = { confirmed = proposal },
+                            label = { Text(proposal.label) },
+                        )
+                    }
+                }
+                confirmed?.let { proposal ->
+                    AlertDialog(
+                        onDismissRequest = { confirmed = null },
+                        title = { Text(proposal.label) },
+                        text = { Text("This acts on your screenshots. Nothing happens until you confirm.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                onActionConfirmed(proposal)
+                                confirmed = null
+                            }) { Text("Confirm") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { confirmed = null }) { Text("Cancel") }
+                        },
+                    )
+                }
             }
         }
     }

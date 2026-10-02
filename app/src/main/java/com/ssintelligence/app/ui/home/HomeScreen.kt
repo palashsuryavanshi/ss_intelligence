@@ -56,6 +56,10 @@ fun HomeScreen(
     onNavigateToInsights: () -> Unit = {},
     onNavigateToCleanup: () -> Unit = {},
     onNavigateToPrivacy: () -> Unit = {},
+    onNavigateToTasks: () -> Unit = {},
+    onNavigateToExpenses: () -> Unit = {},
+    onNavigateToActions: () -> Unit = {},
+    onNavigateToAutomation: () -> Unit = {},
     onOpenScreenshot: (Long) -> Unit,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(locator)),
 ) {
@@ -125,6 +129,10 @@ fun HomeScreen(
                     onInsights = onNavigateToInsights,
                     onCleanup = onNavigateToCleanup,
                     onPrivacy = onNavigateToPrivacy,
+                    onTasks = onNavigateToTasks,
+                    onExpenses = onNavigateToExpenses,
+                    onActions = onNavigateToActions,
+                    onAutomation = onNavigateToAutomation,
                 )
             }
 
@@ -258,6 +266,10 @@ private fun ActionRow(
     onInsights: () -> Unit,
     onCleanup: () -> Unit,
     onPrivacy: () -> Unit,
+    onTasks: () -> Unit,
+    onExpenses: () -> Unit,
+    onActions: () -> Unit,
+    onAutomation: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         androidx.compose.material3.Button(onClick = onScanNow, modifier = Modifier.fillMaxWidth()) {
@@ -311,6 +323,24 @@ private fun ActionRow(
                 modifier = Modifier.weight(1f),
             ) { Text("Privacy") }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = onTasks,
+                modifier = Modifier.weight(1f),
+            ) { Text("Tasks") }
+            androidx.compose.material3.OutlinedButton(
+                onClick = onExpenses,
+                modifier = Modifier.weight(1f),
+            ) { Text("Expenses") }
+            androidx.compose.material3.OutlinedButton(
+                onClick = onActions,
+                modifier = Modifier.weight(1f),
+            ) { Text("Actions") }
+        }
+        androidx.compose.material3.OutlinedButton(
+            onClick = onAutomation,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Automation") }
     }
 }
 

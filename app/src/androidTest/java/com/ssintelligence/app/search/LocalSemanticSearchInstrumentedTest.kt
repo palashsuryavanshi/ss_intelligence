@@ -505,6 +505,12 @@ class LocalSemanticSearchInstrumentedTest {
         override suspend fun setSemanticSearchEnabled(enabled: Boolean) = Unit
         override suspend fun processingMode() = ProcessingMode.AUTOMATIC
         override suspend fun setProcessingMode(mode: ProcessingMode) = Unit
+        override suspend fun isAutomationEnabled(): Boolean = true
+        override suspend fun setAutomationEnabled(enabled: Boolean) = Unit
+        override suspend fun areContextActionsEnabled(): Boolean = true
+        override suspend fun setContextActionsEnabled(enabled: Boolean) = Unit
+        override suspend fun isExpenseExtractionEnabled(): Boolean = true
+        override suspend fun setExpenseExtractionEnabled(enabled: Boolean) = Unit
     }
 
     private object DisabledSettings : SettingsRepository by EnabledSettings {

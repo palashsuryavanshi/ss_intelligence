@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SS Intelligence</string>
+    <string name="shortcut_search">Search</string>
+    <string name="shortcut_ask">Ask</string>
+    <string name="shortcut_recent">Recent</string>
+    <string name="shortcut_insights">Insights</string>
 </resources>

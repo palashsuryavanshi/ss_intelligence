@@ -49,7 +49,7 @@ class AutonomousAnalysisWorker(
             if (batch.isEmpty()) break
             for (row in batch) {
                 if (isStopped) return Result.retry()
-                runCatching { analyze(row, dao, graph, visualDao, autonomous) }
+                runCatching { analyze(row, dao, graph, visualDao, autonomous, locator) }
                     .onFailure { com.ssintelligence.app.util.AppLog.w(TAG, "Autonomous analysis failed screenshotId=${row.id}") }
                 processed++
             }
@@ -66,6 +66,7 @@ class AutonomousAnalysisWorker(
         graph: com.ssintelligence.app.graph.GraphRepository,
         visualDao: com.ssintelligence.app.data.database.VisualDao,
         autonomous: com.ssintelligence.app.autonomous.AutonomousRepository,
+        locator: ServiceLocator,
     ) {
         val urls = dao.urlsForScreenshot(row.id)
         val prices = dao.pricesForScreenshot(row.id)
@@ -109,6 +110,55 @@ class AutonomousAnalysisWorker(
             colors = visual?.colors?.split(",")?.filter { it.isNotBlank() }.orEmpty(),
             neighbours = neighbours,
         )
+        evaluateRules(row, urls, prices, visual, labels, locator)
+    }
+
+    /**
+     * Runs enabled automation rules for one analyzed screenshot.
+     *
+     * Gated on the master automation switch: when the user turns automation
+     * off, nothing here runs. Triggers are derived from the same extracted
+     * data the analysis just used — visual type, entities, prices, URLs —
+     * so a rule and the analysis never disagree about what a screenshot is.
+     */
+    private suspend fun evaluateRules(
+        row: ScreenshotEntity,
+        urls: List<com.ssintelligence.app.data.database.ExtractedUrlEntity>,
+        prices: List<com.ssintelligence.app.data.database.ExtractedPriceEntity>,
+        visual: com.ssintelligence.app.data.database.ScreenshotVisualEntity?,
+        labels: Set<String>,
+        locator: ServiceLocator,
+    ) {
+        if (!runCatching { locator.settingsRepository.isAutomationEnabled() }.getOrDefault(true)) return
+        val engine = com.ssintelligence.app.automation.AutomationEngine(
+            repository = locator.actionRepository,
+            screenshots = locator.screenshotRepository,
+            autonomousDao = locator.database.autonomousDao(),
+        )
+        val context = buildMap {
+            put("visual_type", visual?.shotType ?: "")
+            put("entities", labels.joinToString(" "))
+            put("merchant", urls.firstOrNull()?.host ?: "")
+            put("has_price", prices.isNotEmpty().toString())
+            put("has_url", urls.isNotEmpty().toString())
+        }
+        val triggers = buildList {
+            add(com.ssintelligence.app.automation.RuleTrigger.NEW_SCREENSHOT)
+            if (prices.isNotEmpty()) add(com.ssintelligence.app.automation.RuleTrigger.PRICE_DETECTED)
+            if (urls.isNotEmpty()) add(com.ssintelligence.app.automation.RuleTrigger.URL_DETECTED)
+            if (labels.isNotEmpty()) {
+                add(com.ssintelligence.app.automation.RuleTrigger.ENTITY_DETECTED)
+                add(com.ssintelligence.app.automation.RuleTrigger.TOPIC_DETECTED)
+            }
+            when (visual?.shotType) {
+                "RECEIPT" -> add(com.ssintelligence.app.automation.RuleTrigger.RECEIPT_DETECTED)
+                "TICKET" -> add(com.ssintelligence.app.automation.RuleTrigger.TICKET_DETECTED)
+                else -> Unit
+            }
+        }
+        for (trigger in triggers) {
+            runCatching { engine.evaluate(row.id, trigger, context) }
+        }
     }
 
     companion object {

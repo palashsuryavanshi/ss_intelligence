@@ -44,6 +44,20 @@ interface SettingsRepository {
      */
     suspend fun processingMode(): ProcessingMode
     suspend fun setProcessingMode(mode: ProcessingMode)
+
+    // ------------------------------------------------- Phase 7 automation
+
+    /** Master switch for all local automation rules (§60, §71). */
+    suspend fun isAutomationEnabled(): Boolean
+    suspend fun setAutomationEnabled(enabled: Boolean)
+
+    /** Whether contextual action suggestions appear on detail pages. */
+    suspend fun areContextActionsEnabled(): Boolean
+    suspend fun setContextActionsEnabled(enabled: Boolean)
+
+    /** Whether expense extraction is offered on receipts. */
+    suspend fun isExpenseExtractionEnabled(): Boolean
+    suspend fun setExpenseExtractionEnabled(enabled: Boolean)
 }
 
 /** Background processing policy for expensive intelligence jobs. */

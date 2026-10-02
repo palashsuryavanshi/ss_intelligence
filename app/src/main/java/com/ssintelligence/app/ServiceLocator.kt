@@ -6,6 +6,8 @@ import androidx.work.WorkManager
 import com.ssintelligence.app.data.database.SsIntelligenceDatabase
 import com.ssintelligence.app.data.media.MediaStoreScreenshotSource
 import com.ssintelligence.app.data.media.ScreenshotSource
+import com.ssintelligence.app.actions.ActionRepository
+import com.ssintelligence.app.actions.ActionRepositoryImpl
 import com.ssintelligence.app.assistant.AssistantRepository
 import com.ssintelligence.app.assistant.AssistantRepositoryImpl
 import com.ssintelligence.app.assistant.AssistantRetriever
@@ -104,6 +106,10 @@ class ServiceLocator private constructor(context: Context) {
 
     val autonomousRepository: AutonomousRepository by lazy {
         AutonomousRepositoryImpl(database.autonomousDao())
+    }
+
+    val actionRepository: ActionRepository by lazy {
+        ActionRepositoryImpl(database.actionDao())
     }
 
     val searchEngine: ScreenshotSearchEngine by lazy {
