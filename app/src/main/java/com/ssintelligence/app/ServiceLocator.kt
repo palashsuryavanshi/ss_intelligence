@@ -35,6 +35,11 @@ import com.ssintelligence.app.ml.ocr.MlKitTextRecognizer
 import com.ssintelligence.app.ml.ocr.TextRecognizer
 import com.ssintelligence.app.search.LocalSearchEngine
 import com.ssintelligence.app.search.ScreenshotSearchEngine
+import com.ssintelligence.app.security.AppLockManager
+import com.ssintelligence.app.security.ClipboardSecurityManager
+import com.ssintelligence.app.security.DataDeletionManager
+import com.ssintelligence.app.security.PrivacyManager
+import com.ssintelligence.app.security.SensitiveContentDetector
 import com.ssintelligence.app.semantic.HashedNgramEmbeddingProvider
 import com.ssintelligence.app.semantic.SemanticRepository
 import com.ssintelligence.app.vision.BitmapVisualAnalyzer
@@ -115,6 +120,22 @@ class ServiceLocator private constructor(context: Context) {
 
     val actionExecutor: ActionExecutor by lazy {
         ActionExecutor(appContext)
+    }
+
+    val privacyManager: PrivacyManager by lazy {
+        PrivacyManager(settingsRepository)
+    }
+
+    val appLockManager: AppLockManager by lazy {
+        AppLockManager(appContext)
+    }
+
+    val clipboardSecurityManager: ClipboardSecurityManager by lazy {
+        ClipboardSecurityManager(appContext, privacyManager)
+    }
+
+    val dataDeletionManager: DataDeletionManager by lazy {
+        DataDeletionManager(database, screenshotRepository, actionRepository, autonomousRepository)
     }
 
     val searchEngine: ScreenshotSearchEngine by lazy {

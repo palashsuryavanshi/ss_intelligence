@@ -58,6 +58,38 @@ interface SettingsRepository {
     /** Whether expense extraction is offered on receipts. */
     suspend fun isExpenseExtractionEnabled(): Boolean
     suspend fun setExpenseExtractionEnabled(enabled: Boolean)
+
+    // ------------------------------------------------- Phase 8 privacy & security
+
+    /** Whether app lock (biometric/device credential) is required on open. */
+    suspend fun isAppLockEnabled(): Boolean
+    suspend fun setAppLockEnabled(enabled: Boolean)
+
+    /** Whether sensitive thumbnails are hidden until authenticated. */
+    suspend fun isSensitiveContentProtectionEnabled(): Boolean
+    suspend fun setSensitiveContentProtectionEnabled(enabled: Boolean)
+
+    /** Whether app-switcher preview uses secure-window FLAG_SECURE. */
+    suspend fun isSecureWindowEnabled(): Boolean
+    suspend fun setSecureWindowEnabled(enabled: Boolean)
+
+    /** Whether notifications redact sensitive content. */
+    suspend fun isNotificationPrivacyEnabled(): Boolean
+    suspend fun setNotificationPrivacyEnabled(enabled: Boolean)
+
+    /** Whether clipboard auto-clears after timeout for sensitive copies. */
+    suspend fun isClipboardProtectionEnabled(): Boolean
+    suspend fun setClipboardProtectionEnabled(enabled: Boolean)
+
+    suspend fun isAssistantHistoryEnabled(): Boolean
+    suspend fun setAssistantHistoryEnabled(enabled: Boolean)
+
+    /** Analytics is OFF by default and never collects screenshot content. */
+    suspend fun isAnalyticsEnabled(): Boolean
+    suspend fun setAnalyticsEnabled(enabled: Boolean)
+
+    suspend fun isCrashReportingEnabled(): Boolean
+    suspend fun setCrashReportingEnabled(enabled: Boolean)
 }
 
 /** Background processing policy for expensive intelligence jobs. */

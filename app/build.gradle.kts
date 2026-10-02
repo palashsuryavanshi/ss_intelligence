@@ -127,6 +127,9 @@ dependencies {
     // Settings persistence
     implementation(libs.androidx.datastore.preferences)
 
+    // Biometric authentication
+    implementation(libs.androidx.biometric)
+
     // On-device OCR (bundled model: fully offline, no model download).
     //
     // The transitive datatransport library stays on the classpath because ML
