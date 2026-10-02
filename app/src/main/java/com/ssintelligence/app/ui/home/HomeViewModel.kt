@@ -52,9 +52,67 @@ class HomeViewModel(
         val count: Int,
     )
 
+    /**
+     * Important screenshots from the autonomous analysis (§11).
+     *
+     * Derived from the engine's importance scoring — confirmations, tickets,
+     * orders, receipts — never used to delete anything.
+     */
+    private val _important = MutableStateFlow(emptyList<com.ssintelligence.app.domain.model.Screenshot>())
+    val important: StateFlow<List<com.ssintelligence.app.domain.model.Screenshot>> = _important.asStateFlow()
+
+    /**
+     * Reviewable insights for the insights center (§51).
+     */
+    private val _insights = MutableStateFlow(emptyList<Insight>())
+    val insights: StateFlow<List<Insight>> = _insights.asStateFlow()
+
+    data class Insight(
+        val id: String,
+        val title: String,
+        val detail: String,
+        val kind: com.ssintelligence.app.autonomous.InsightKind,
+    )
+
     init {
         refreshGroups()
         refreshSuggestion()
+        refreshAutonomous()
+    }
+
+    fun refreshAutonomous() {
+        viewModelScope.launch {
+            val repository = locator.autonomousRepository
+            val events = runCatching { repository.events() }.getOrDefault(emptyList())
+            val sessions = runCatching { repository.sessions() }.getOrDefault(emptyList())
+            val suggestions = runCatching { locator.screenshotRepository.getRecent(200) }
+                .getOrDefault(emptyList())
+            // Important: screenshots whose event is confirmed or strongly matched.
+            val importantIds = events
+                .filter { it.confidence == com.ssintelligence.app.autonomous.EventConfidence.CONFIRMED ||
+                    it.confidence == com.ssintelligence.app.autonomous.EventConfidence.STRONG }
+                .flatMap { it.screenshotIds }
+                .distinct()
+            _important.value = importantIds.mapNotNull { locator.screenshotRepository.getById(it) }
+            // Insights: one line per detected structure, all reviewable.
+            val insights = buildList {
+                val topicCount = runCatching { repository.topics() }.getOrDefault(emptyList()).size
+                if (topicCount > 0) {
+                    add(Insight("topics", "$topicCount topics detected", "Grouped from your screenshots", com.ssintelligence.app.autonomous.InsightKind.TOPIC))
+                }
+                if (sessions.isNotEmpty()) {
+                    add(Insight("sessions", "${sessions.size} research sessions", "Screenshots grouped by activity", com.ssintelligence.app.autonomous.InsightKind.SESSION))
+                }
+                if (events.isNotEmpty()) {
+                    add(Insight("events", "${events.size} possible events", "Booking, purchase and payment sequences", com.ssintelligence.app.autonomous.InsightKind.EVENT))
+                }
+                val nearDupes = runCatching { locator.screenshotRepository.nearDuplicateGroups(20) }.getOrDefault(emptyList())
+                if (nearDupes.isNotEmpty()) {
+                    add(Insight("dupes", "${nearDupes.size} near-duplicate groups", "Similar screenshots to review", com.ssintelligence.app.autonomous.InsightKind.DUPLICATE))
+                }
+            }
+            _insights.value = insights
+        }
     }
 
     fun refreshGroups() {

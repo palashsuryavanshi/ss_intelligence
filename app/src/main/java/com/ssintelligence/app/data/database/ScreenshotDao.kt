@@ -361,6 +361,18 @@ interface ScreenshotDao {
     )
     suspend fun recentRows(limit: Int): List<ScreenshotEntity>
 
+    /** Screenshots with no topic row yet — the autonomous analysis backlog. */
+    @Query(
+        """
+        SELECT s.* FROM screenshots s
+        LEFT JOIN topics t ON t.screenshot_id = s.id
+        WHERE t.id IS NULL AND s.status <> 'FAILED'
+        ORDER BY s.id ASC
+        LIMIT :limit OFFSET :offset
+        """
+    )
+    suspend fun rowsWithoutTopic(offset: Int, limit: Int): List<ScreenshotEntity>
+
     // -------------------------------------------------------------- search
 
     /**

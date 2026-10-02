@@ -49,6 +49,9 @@ import com.ssintelligence.app.ui.common.MetadataRow
 fun SettingsScreen(
     locator: ServiceLocator,
     onBack: () -> Unit,
+    onNavigateToInsights: () -> Unit = {},
+    onNavigateToCleanup: () -> Unit = {},
+    onNavigateToPrivacy: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(locator)),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -147,6 +150,16 @@ fun SettingsScreen(
                 onClearVisuals = viewModel::onClearVisualIndex,
                 onClearCategories = viewModel::onClearAutoCategories,
                 onClearGraph = viewModel::onClearGraph,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingsHeader("Smart organization")
+            SmartOrganizationSection(
+                onInsights = onNavigateToInsights,
+                onCleanup = onNavigateToCleanup,
+                onPrivacy = onNavigateToPrivacy,
+                onRebuildAutonomous = viewModel::onRebuildAutonomous,
+                onClearAutonomous = viewModel::onClearAutonomous,
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
@@ -279,6 +292,37 @@ private fun SettingsHeader(text: String) {
             .padding(top = 12.dp, bottom = 4.dp)
             .semantics { heading() },
     )
+}
+
+/**
+ * Smart organization controls (§60).
+ *
+ * Each feature is independent and can be turned off. Nothing here deletes a
+ * screenshot: the cleanup center only ever suggests, and deletion always
+ * requires explicit confirmation.
+ */
+@Composable
+private fun SmartOrganizationSection(
+    onInsights: () -> Unit,
+    onCleanup: () -> Unit,
+    onPrivacy: () -> Unit,
+    onRebuildAutonomous: () -> Unit,
+    onClearAutonomous: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Topics, sessions, events, importance and lifecycle are " +
+                "derived automatically from your screenshots. Nothing is deleted " +
+                "without your confirmation.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(onClick = onInsights) { Text("View insights") }
+        TextButton(onClick = onCleanup) { Text("Review cleanup suggestions") }
+        TextButton(onClick = onPrivacy) { Text("Privacy center") }
+        TextButton(onClick = onRebuildAutonomous) { Text("Rebuild organization") }
+        TextButton(onClick = onClearAutonomous) { Text("Clear generated organization") }
+    }
 }
 
 @Composable

@@ -43,8 +43,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AssistantEvidenceEntity::class,
         MemorySnapshotEntity::class,
         MemorySnapshotItemEntity::class,
+        TopicEntity::class,
+        SessionEntity::class,
+        EventEntity::class,
+        ScreenshotTagEntity::class,
+        SuggestionEntity::class,
+        ArchiveStateEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class SsIntelligenceDatabase : RoomDatabase() {
@@ -62,6 +68,8 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
     abstract fun collectionDao(): CollectionDao
 
     abstract fun assistantDao(): AssistantDao
+
+    abstract fun autonomousDao(): AutonomousDao
 
     companion object {
         const val NAME = "ss_intelligence.db"
@@ -147,6 +155,107 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_screenshot_categories_category` " +
                         "ON `screenshot_categories` (`category`)",
                 )
+            }
+        }
+
+        /**
+         * v5 → v6 adds the autonomous organization layer.
+         *
+         * Topics, sessions, events, tags, suggestions and archive state are all
+         * derived from the existing index, so the migration is purely additive:
+         * no existing table changes and nothing is dropped.
+         */
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `topics` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `label` TEXT NOT NULL,
+                        `subject` TEXT NOT NULL,
+                        `signals` TEXT NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_topics_screenshot_id` ON `topics` (`screenshot_id`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `sessions` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `label` TEXT NOT NULL,
+                        `subject` TEXT NOT NULL,
+                        `start_seconds` INTEGER NOT NULL,
+                        `end_seconds` INTEGER NOT NULL,
+                        `signals` TEXT NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sessions_screenshot_id` ON `sessions` (`screenshot_id`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `events` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `confidence` TEXT NOT NULL,
+                        `subject` TEXT NOT NULL,
+                        `start_seconds` INTEGER NOT NULL,
+                        `end_seconds` INTEGER NOT NULL,
+                        `signals` TEXT NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_events_screenshot_id` ON `events` (`screenshot_id`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `screenshot_tags` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `label` TEXT NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `removed` INTEGER NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_screenshot_tags_screenshot_id` ON `screenshot_tags` (`screenshot_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_screenshot_tags_label` ON `screenshot_tags` (`label`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `suggestions` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `reason` TEXT NOT NULL,
+                        `accepted` INTEGER NOT NULL,
+                        `dismissed` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_suggestions_kind` ON `suggestions` (`kind`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_suggestions_screenshot_id` ON `suggestions` (`screenshot_id`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `archive_state` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `archived` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`screenshot_id`) REFERENCES `screenshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_archive_state_screenshot_id` ON `archive_state` (`screenshot_id`)")
             }
         }
 
@@ -339,7 +448,7 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
 
         fun build(context: Context): SsIntelligenceDatabase =
             Room.databaseBuilder(context.applicationContext, SsIntelligenceDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 // No destructive fallback: losing an index silently would be
                 // worse than a visible error. "Clear Index" in Settings is the
                 // explicit recovery path.

@@ -211,6 +211,21 @@ class SettingsViewModel(
         }
     }
 
+    /** Re-runs the autonomous analysis over the whole library. */
+    fun onRebuildAutonomous() {
+        com.ssintelligence.app.indexing.AutonomousAnalysisWorker.requestNow(
+            locator.toApplicationContext(),
+        )
+    }
+
+    /** Clears derived organization data; screenshots and OCR are untouched. */
+    fun onClearAutonomous() {
+        viewModelScope.launch {
+            locator.autonomousRepository.clearAutonomousData()
+            refreshStorage()
+        }
+    }
+
     fun refreshPhase4() {
         viewModelScope.launch {
             _processingMode.value = settings.processingMode()

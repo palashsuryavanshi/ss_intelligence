@@ -36,7 +36,18 @@ and it always shows the screenshots an answer came from. It is evidence-first by
 construction: retrieval runs before any answer text exists, and a validator strips any
 claim that does not trace back to a retrieved screenshot. No generative model is required;
 the answer layer is deterministic templates over extracted facts, so the assistant is
-useful the moment the library is indexed and stays fully offline.
+useful the moment the library is indexed and stays fully offline. Sensitive content is
+masked behind an explicit reveal, and no notification is generated from assistant output.
+
+Phase 6 makes the organization itself autonomous. A background engine continuously derives
+topics, research sessions, events, importance, lifecycle and reviewable suggestions from
+the same local index — so the library organizes itself without the user asking. Every
+derived structure is traceable to the screenshots that produced it, every suggestion is
+reviewable (accept / reject / ignore), and nothing is ever deleted without explicit user
+confirmation. The home screen surfaces smart collections, important screenshots and
+insights; dedicated Insights, Cleanup and Privacy centers make the derived organization
+inspectable; and the assistant understands the detected structures ("Show my shopping
+sessions", "Which screenshots are probably duplicates?").
 
 ---
 
@@ -57,6 +68,7 @@ useful the moment the library is indexed and stays fully offline.
 - [Knowledge graph](#knowledge-graph)
 - [Organization](#organization)
 - [Assistant](#assistant)
+- [Autonomous organization](#autonomous-organization)
 - [Performance notes](#performance-notes)
 - [Accessibility](#accessibility)
 - [Logging](#logging)
@@ -208,7 +220,13 @@ Everything below was run on an emulator (API 36 / SDK 37) rather than assumed:
   cards; "What prices did I see for Pixel 9a" answered honestly with **"I couldn't find a
   screenshot with that information"** because this library contains no Pixel 9a — the
   no-evidence path working as designed rather than inventing an answer
-- 400 unit tests and 96 instrumented tests pass; release build succeeds under R8 with no
+- Phase 6 verified: the autonomous engine derives topics, sessions, events, importance,
+  lifecycle and suggestions deterministically; a fresh OTP screenshot is classified
+  "Possibly outdated" regardless of age; a checkout without confirmation is "Possible
+  purchase", never "purchase completed"; the cleanup center surfaces near-duplicate and
+  information-duplicate suggestions as reviewable questions; the privacy center reports
+  actual metrics with cloud uploads at `0 (no INTERNET permission)`
+- 415 unit tests and 97 instrumented tests pass; release build succeeds under R8 with no
   `INTERNET` permission
 
 Five bugs were found only by running this on a device, and all are now fixed and covered by
@@ -282,20 +300,22 @@ validated a schema the current migration code never produced.
 ./gradlew connectedDebugAndroidTest  # Room + full search engine, requires a device/emulator
 ```
 
-**400 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
+**415 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
 screenshot heuristics, FTS query construction, the whole Phase 2 search layer (query parser
 and each sub-parser, intent classification, ranker, snippets, currency rendering), the
 Phase 3 semantic layer (deterministic embeddings, concept expansion, hybrid scoring,
 rule classification, extractive summaries, entities, sensitive flags, smart groups), the
 Phase 4 layers (perceptual hashing, palette analysis, layout geometry, screenshot-type
 classification, entity normalization, product-naming rules, graph building, comparison, the
-visual query parser), and the Phase 5 assistant (intent detection, entity and price
+visual query parser), the Phase 5 assistant (intent detection, entity and price
 extraction, temporal windows, pronoun resolution across turns, normalized evidence
-ranking, answer grounding, and the anti-hallucination validator). The search, semantic,
-vision, graph and assistant layers are deliberately free of Android dependencies so they
+ranking, answer grounding, and the anti-hallucination validator), and the Phase 6
+autonomous engine (topic, session, event, importance, lifecycle and suggestion detection,
+including the evidence-aware language rules). The search, semantic, vision, graph,
+assistant and autonomous layers are deliberately free of Android dependencies so they
 are testable as plain JVM code.
 
-**96 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
+**97 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
 search, search ranking, filters, duplicate lookup, the pending queue, stale-work recovery,
 incremental re-indexing, keyset pagination, index rebuild and OTP isolation from search),
 both schema migrations — all three, from v1, v2 and v3 — the complete Phase 2 engine against a
@@ -492,7 +512,7 @@ is never synced anywhere.
 
 ### Schema version
 
-`version = 5`, with four explicit migrations:
+`version = 6`, with five explicit migrations:
 
 | Migration | Adds |
 |---|---|
@@ -500,6 +520,7 @@ is never synced anywhere.
 | `MIGRATION_2_3` | `screenshot_embeddings`, `screenshot_categories` |
 | `MIGRATION_3_4` | `screenshot_visuals`, `graph_entities`, `graph_relations`, `collections`, `collection_members` |
 | `MIGRATION_4_5` | `assistant_conversations`, `assistant_messages`, `assistant_evidence`, `memory_snapshots`, `memory_snapshot_items` |
+| `MIGRATION_5_6` | `topics`, `sessions`, `events`, `screenshot_tags`, `suggestions`, `archive_state` |
 
 There is deliberately **no destructive fallback**: silently dropping a user's index because a
 version changed is exactly the failure mode the explicit "Clear index" control exists to
@@ -1190,6 +1211,69 @@ history can be cleared wholesale, and clearing it never touches the screenshot i
   the subject.
 - **Browse** — long-press to multi-select, then "Ask about these screenshots" for a
   comparative question over the selection.
+
+---
+
+## Autonomous organization
+
+Phase 6 makes the organization itself autonomous. A background engine continuously derives
+structure from the same local index, so the library organizes itself without the user
+asking — while remaining inspectable and never destructive.
+
+### The engine
+
+`AutonomousAnalysisEngine` is deterministic and reads only what the Phase 1-5 pipeline
+already produced. Each detector is independent and unit-testable:
+
+| Detector | Derives | Key rule |
+|---|---|---|
+| `detectTopic` | a topic from the screenshot's own entity or first OCR line | no hardcoded topic list |
+| `detectSession` | a research session from timestamp proximity + shared subject | adjacency alone is not a session |
+| `detectEvent` | a booking / purchase / payment / travel event | "Possible purchase" without confirmation, never "purchase completed" |
+| `scoreImportance` | Important / Possibly important / Routine | confirmations, tickets, receipts are important; a bare search is routine |
+| `analyzeLifecycle` | New / Active / Reference / Possibly outdated | an OTP is stale the moment it is read, however recent |
+| `suggest` | reviewable suggestions | every suggestion is a question, never an action |
+
+### Evidence-aware language
+
+The event detector is the clearest example of the honesty rule. A confirmation screenshot
+earns **"Confirmed"**; a checkout page without confirmation earns **"Possible purchase"**;
+a bare search earns nothing. The app never claims a purchase happened without a
+confirmation screenshot, and never infers real-world intent from incomplete screenshots.
+
+### Incremental and battery-aware
+
+`AutonomousAnalysisWorker` selects only screenshots with no topic row yet, so a re-run
+after an interruption resumes where it stopped. It is chunked, bounded, and honours the
+processing mode like the other catch-up workers. The pipeline never reprocesses an
+unchanged screenshot.
+
+### Smart home
+
+The home screen surfaces what the engine derived: smart collections, important
+screenshots, and reviewable insights. Every insight names what was detected and links to
+the screenshots that produced it.
+
+### Insights, cleanup and privacy centers
+
+- **Insights center** — every detected topic, session and event, each reviewable.
+- **Cleanup center** — near-duplicate groups and information-duplicate sequences as
+  reviewable suggestions. Nothing is deleted without explicit confirmation (§64).
+- **Privacy center** — actual application metrics: screenshots analyzed, OCR processed,
+  embeddings stored locally, cloud uploads `0 (no INTERNET permission)`. No fabricated
+  numbers.
+
+### Archive
+
+Archived screenshots stay searchable, indexed and assistant-findable; they simply leave
+the normal recent views. Archiving is reversible and never deletes.
+
+### Assistant integration
+
+The Phase 5 assistant understands the detected structures: "Show my shopping sessions",
+"What travel plans have I saved?", "Which screenshots are probably duplicates?". The
+organization query path reads the same derived tables the insights center shows, so the
+assistant and the UI never disagree about what was detected.
 
 ---
 

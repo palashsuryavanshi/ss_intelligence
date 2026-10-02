@@ -37,6 +37,9 @@ import com.ssintelligence.app.ui.explore.EntityScreen
 import com.ssintelligence.app.ui.explore.ExploreScreen
 import com.ssintelligence.app.ui.home.HomeScreen
 import com.ssintelligence.app.ui.assistant.AssistantScreen
+import com.ssintelligence.app.ui.cleanup.CleanupScreen
+import com.ssintelligence.app.ui.insights.InsightsScreen
+import com.ssintelligence.app.ui.privacy.PrivacyScreen
 import com.ssintelligence.app.ui.onboarding.OnboardingScreen
 import com.ssintelligence.app.ui.screenshots.ScreenshotListScreen
 import com.ssintelligence.app.ui.search.ImagePickerScreen
@@ -64,6 +67,9 @@ private object Routes {
     const val COMPARE = "compare/{firstId}?secondId={secondId}"
     const val PICK_IMAGE = "pick-image"
     const val ASSISTANT = "assistant?anchor={anchor}&selection={selection}"
+    const val INSIGHTS = "insights"
+    const val CLEANUP = "cleanup"
+    const val PRIVACY = "privacy"
 
     fun detail(id: Long) = "detail/$id"
     fun entity(id: Long) = "entity/$id"
@@ -200,6 +206,9 @@ private fun MainNavigation(locator: ServiceLocator) {
                 onNavigateToCollections = { navController.navigate(Routes.COLLECTIONS) },
                 onNavigateToExplore = { navController.navigate(Routes.EXPLORE) },
                 onNavigateToAssistant = { navController.navigate(Routes.assistant()) },
+                onNavigateToInsights = { navController.navigate(Routes.INSIGHTS) },
+                onNavigateToCleanup = { navController.navigate(Routes.CLEANUP) },
+                onNavigateToPrivacy = { navController.navigate(Routes.PRIVACY) },
                 onOpenEntity = { entityId -> navController.navigate(Routes.entity(entityId)) },
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
             )
@@ -259,6 +268,26 @@ private fun MainNavigation(locator: ServiceLocator) {
                 locator = locator,
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
                 onAskSelection = { ids -> navController.navigate(Routes.assistant(selection = ids)) },
+            )
+        }
+        composable(Routes.INSIGHTS) {
+            InsightsScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(Routes.CLEANUP) {
+            CleanupScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+            )
+        }
+        composable(Routes.PRIVACY) {
+            PrivacyScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
             )
         }
         composable(

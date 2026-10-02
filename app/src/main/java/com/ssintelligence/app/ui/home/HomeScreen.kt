@@ -53,12 +53,17 @@ fun HomeScreen(
     onNavigateToExplore: () -> Unit = {},
     onNavigateToAssistant: () -> Unit = {},
     onOpenEntity: (Long) -> Unit = {},
+    onNavigateToInsights: () -> Unit = {},
+    onNavigateToCleanup: () -> Unit = {},
+    onNavigateToPrivacy: () -> Unit = {},
     onOpenScreenshot: (Long) -> Unit,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(locator)),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val groups by viewModel.groups.collectAsStateWithLifecycle()
     val suggestion by viewModel.suggestion.collectAsStateWithLifecycle()
+    val important by viewModel.important.collectAsStateWithLifecycle()
+    val insights by viewModel.insights.collectAsStateWithLifecycle()
     val recent by locator.screenshotRepository
         .observeRecent(RECENT_LIMIT)
         .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -117,6 +122,9 @@ fun HomeScreen(
                     onCollections = onNavigateToCollections,
                     onExplore = onNavigateToExplore,
                     onAssistant = onNavigateToAssistant,
+                    onInsights = onNavigateToInsights,
+                    onCleanup = onNavigateToCleanup,
+                    onPrivacy = onNavigateToPrivacy,
                 )
             }
 
@@ -148,6 +156,25 @@ fun HomeScreen(
                             locator = locator,
                             onOpenScreenshot = onOpenScreenshot,
                         )
+                    }
+                }
+                if (important.isNotEmpty()) {
+                    item("important-header") {
+                        SectionHeader("Important")
+                    }
+                    items(important.take(4), key = { "important-${it.id}" }) { screenshot ->
+                        ScreenshotRow(
+                            screenshot = screenshot,
+                            onClick = onOpenScreenshot,
+                        )
+                    }
+                }
+                if (insights.isNotEmpty()) {
+                    item("insights-header") {
+                        SectionHeader("Insights")
+                    }
+                    items(insights, key = { "insight-${it.id}" }) { insight ->
+                        InsightRow(insight = insight)
                     }
                 }
                 item("recent-header") {
@@ -228,6 +255,9 @@ private fun ActionRow(
     onCollections: () -> Unit,
     onExplore: () -> Unit,
     onAssistant: () -> Unit,
+    onInsights: () -> Unit,
+    onCleanup: () -> Unit,
+    onPrivacy: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         androidx.compose.material3.Button(onClick = onScanNow, modifier = Modifier.fillMaxWidth()) {
@@ -266,6 +296,20 @@ private fun ActionRow(
                 onClick = onExplore,
                 modifier = Modifier.weight(1f),
             ) { Text("Explore") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = onInsights,
+                modifier = Modifier.weight(1f),
+            ) { Text("Insights") }
+            androidx.compose.material3.OutlinedButton(
+                onClick = onCleanup,
+                modifier = Modifier.weight(1f),
+            ) { Text("Cleanup") }
+            androidx.compose.material3.OutlinedButton(
+                onClick = onPrivacy,
+                modifier = Modifier.weight(1f),
+            ) { Text("Privacy") }
         }
     }
 }
@@ -359,6 +403,31 @@ private fun SmartGroupCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+/**
+ * One insight row (§51): a locally derived, reviewable observation.
+ */
+@Composable
+private fun InsightRow(insight: HomeViewModel.Insight) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                text = insight.title,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                text = insight.detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

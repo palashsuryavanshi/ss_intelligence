@@ -12,6 +12,8 @@ import com.ssintelligence.app.assistant.AssistantRetriever
 import com.ssintelligence.app.assistant.EvidenceContextBuilder
 import com.ssintelligence.app.assistant.EvidenceRanker
 import com.ssintelligence.app.assistant.ScreenshotAssistant
+import com.ssintelligence.app.autonomous.AutonomousRepository
+import com.ssintelligence.app.autonomous.AutonomousRepositoryImpl
 import com.ssintelligence.app.data.repository.SearchHistoryRepositoryImpl
 import com.ssintelligence.app.data.repository.ScreenshotRepositoryFactory
 import com.ssintelligence.app.data.repository.SemanticRepositoryImpl
@@ -100,6 +102,10 @@ class ServiceLocator private constructor(context: Context) {
         )
     }
 
+    val autonomousRepository: AutonomousRepository by lazy {
+        AutonomousRepositoryImpl(database.autonomousDao())
+    }
+
     val searchEngine: ScreenshotSearchEngine by lazy {
         LocalSearchEngine(
             dao = database.screenshotDao(),
@@ -175,6 +181,7 @@ class ServiceLocator private constructor(context: Context) {
                 )
             com.ssintelligence.app.indexing.SemanticIndexWorker.requestCatchUp(appContext, mode)
             com.ssintelligence.app.indexing.VisualIndexWorker.requestCatchUp(appContext, mode)
+            com.ssintelligence.app.indexing.AutonomousAnalysisWorker.requestNow(appContext)
         }
     }
 
