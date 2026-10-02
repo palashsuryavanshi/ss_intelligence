@@ -38,7 +38,7 @@ class MigrationInstrumentedTest {
     @Before
     fun deleteLeftoverDatabases() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        for (name in listOf(TEST_DB, TEST_DB_V3, TEST_DB_V4)) {
+        for (name in listOf(TEST_DB, TEST_DB_V3, TEST_DB_V4, TEST_DB_V5)) {
             context.deleteDatabase(name)
         }
     }
@@ -219,9 +219,83 @@ class MigrationInstrumentedTest {
         migrated.close()
     }
 
+    @Test
+    fun migrateFromFourToFiveKeepsEverythingAndAddsAssistantTables() {
+        helper.createDatabase(TEST_DB_V5, 4).apply {
+            execSQL(
+                """
+                INSERT INTO screenshots (
+                    id, media_store_id, uri, filename, relative_path, date_added,
+                    date_modified, file_size, width, height, mime_type, ocr_text,
+                    content_hash, duplicate_of_id, status, processing_error,
+                    created_at, updated_at
+                ) VALUES (1, 42, 'content://x', 'Screenshot_1.png', 'Pictures/Screenshots',
+                    1700000000, 1700000000, 1024, 1080, 2400, 'image/png',
+                    'Google Pixel 9a', 'hash-1', NULL, 'COMPLETED', NULL, 0, 0)
+                """.trimIndent(),
+            )
+            execSQL(
+                "INSERT INTO screenshot_visuals (screenshot_id, dhash, colors, brightness, " +
+                    "is_dark, text_coverage, shot_type, layout, model_version, created_at) " +
+                    "VALUES (1, 123, 'blue,white', 200.0, 0, 0.3, 'APP_UI', 'NONE', 'visual-v1', 0)",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(
+            TEST_DB_V5,
+            5,
+            true,
+            SsIntelligenceDatabase.MIGRATION_4_5,
+        )
+
+        // Screenshots and visuals survive.
+        migrated.query("SELECT filename FROM screenshots WHERE id = 1").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Screenshot_1.png", cursor.getString(0))
+        }
+        migrated.query("SELECT COUNT(*) FROM screenshot_visuals").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+
+        // The assistant tables exist and are writable.
+        migrated.execSQL(
+            "INSERT INTO assistant_conversations (title, created_at, updated_at) " +
+                "VALUES ('Pixel Research', 0, 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO assistant_messages (conversation_id, role, text, intent, created_at) " +
+                "VALUES (1, 'user', 'What prices?', 'PRICE_HISTORY', 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO assistant_evidence (message_id, screenshot_id, kind) " +
+                "VALUES (1, 1, 'text match')",
+        )
+        migrated.execSQL(
+            "INSERT INTO memory_snapshots (name, summary, created_at) " +
+                "VALUES ('Pixel Research', '3 prices', 0)",
+        )
+        migrated.execSQL(
+            "INSERT INTO memory_snapshot_items (snapshot_id, screenshot_id) " +
+                "VALUES (1, 1)",
+        )
+        migrated.query("SELECT COUNT(*) FROM assistant_messages").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+        migrated.query("SELECT COUNT(*) FROM memory_snapshot_items").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+
+        migrated.close()
+    }
+
     private companion object {
         const val TEST_DB = "migration-test.db"
         const val TEST_DB_V3 = "migration-test-v3.db"
         const val TEST_DB_V4 = "migration-test-v4.db"
+        const val TEST_DB_V5 = "migration-test-v5.db"
     }
 }

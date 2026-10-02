@@ -36,6 +36,7 @@ import com.ssintelligence.app.ui.detail.ScreenshotDetailScreen
 import com.ssintelligence.app.ui.explore.EntityScreen
 import com.ssintelligence.app.ui.explore.ExploreScreen
 import com.ssintelligence.app.ui.home.HomeScreen
+import com.ssintelligence.app.ui.assistant.AssistantScreen
 import com.ssintelligence.app.ui.onboarding.OnboardingScreen
 import com.ssintelligence.app.ui.screenshots.ScreenshotListScreen
 import com.ssintelligence.app.ui.search.ImagePickerScreen
@@ -62,12 +63,29 @@ private object Routes {
     const val SIMILAR = "similar/{screenshotId}"
     const val COMPARE = "compare/{firstId}?secondId={secondId}"
     const val PICK_IMAGE = "pick-image"
+    const val ASSISTANT = "assistant?anchor={anchor}&selection={selection}"
 
     fun detail(id: Long) = "detail/$id"
     fun entity(id: Long) = "entity/$id"
     fun similar(id: Long) = "similar/$id"
     fun compare(firstId: Long, secondId: Long? = null) =
         if (secondId == null) "compare/$firstId" else "compare/$firstId?secondId=$secondId"
+
+    /**
+     * Assistant entry point.
+     *
+     * [anchor] is a single screenshot the user is asking about ("Ask about this
+     * screenshot"); [selection] is a comma-separated set ("Ask about these").
+     * Both are optional — the plain assistant screen has neither.
+     */
+    fun assistant(anchor: Long? = null, selection: List<Long> = emptyList()) = buildString {
+        append("assistant")
+        val params = buildList {
+            if (anchor != null) add("anchor=$anchor")
+            if (selection.isNotEmpty()) add("selection=${selection.joinToString(",")}")
+        }
+        if (params.isNotEmpty()) append("?${params.joinToString("&")}")
+    }
 
     /**
      * Debug-only route. The destination is only registered when
@@ -181,6 +199,7 @@ private fun MainNavigation(locator: ServiceLocator) {
                 onNavigateToTimeline = { navController.navigate(Routes.TIMELINE) },
                 onNavigateToCollections = { navController.navigate(Routes.COLLECTIONS) },
                 onNavigateToExplore = { navController.navigate(Routes.EXPLORE) },
+                onNavigateToAssistant = { navController.navigate(Routes.assistant()) },
                 onOpenEntity = { entityId -> navController.navigate(Routes.entity(entityId)) },
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
             )
@@ -239,6 +258,33 @@ private fun MainNavigation(locator: ServiceLocator) {
             ScreenshotListScreen(
                 locator = locator,
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+                onAskSelection = { ids -> navController.navigate(Routes.assistant(selection = ids)) },
+            )
+        }
+        composable(
+            route = Routes.ASSISTANT,
+            arguments = listOf(
+                navArgument("anchor") {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                },
+                navArgument("selection") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
+        ) { entry ->
+            val anchor = entry.arguments?.getLong("anchor")?.takeIf { it >= 0 }
+            val selection = entry.arguments?.getString("selection")
+                ?.split(",")
+                ?.mapNotNull { it.toLongOrNull() }
+                .orEmpty()
+            AssistantScreen(
+                locator = locator,
+                onBack = { navController.popBackStack() },
+                onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
+                anchor = anchor,
+                selection = selection,
             )
         }
         composable(Routes.DUPLICATES) {
@@ -271,6 +317,7 @@ private fun MainNavigation(locator: ServiceLocator) {
                     navController.navigate("${Routes.SEARCH}?preset=${java.net.URLEncoder.encode(domain, "UTF-8")}")
                 },
                 onFindVisuallySimilar = { navController.navigate(Routes.similar(id)) },
+                onAskAbout = { shotId -> navController.navigate(Routes.assistant(anchor = shotId)) },
             )
         }
         composable(Routes.TIMELINE) {

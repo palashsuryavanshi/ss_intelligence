@@ -51,6 +51,7 @@ fun HomeScreen(
     onNavigateToTimeline: () -> Unit = {},
     onNavigateToCollections: () -> Unit = {},
     onNavigateToExplore: () -> Unit = {},
+    onNavigateToAssistant: () -> Unit = {},
     onOpenEntity: (Long) -> Unit = {},
     onOpenScreenshot: (Long) -> Unit,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(locator)),
@@ -115,6 +116,7 @@ fun HomeScreen(
                     onTimeline = onNavigateToTimeline,
                     onCollections = onNavigateToCollections,
                     onExplore = onNavigateToExplore,
+                    onAssistant = onNavigateToAssistant,
                 )
             }
 
@@ -225,10 +227,15 @@ private fun ActionRow(
     onTimeline: () -> Unit,
     onCollections: () -> Unit,
     onExplore: () -> Unit,
+    onAssistant: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         androidx.compose.material3.Button(onClick = onScanNow, modifier = Modifier.fillMaxWidth()) {
             Text("Scan now")
+        }
+        // The assistant is the headline feature: it talks to the whole library.
+        androidx.compose.material3.Button(onClick = onAssistant, modifier = Modifier.fillMaxWidth()) {
+            Text("Ask your screenshots")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             androidx.compose.material3.OutlinedButton(

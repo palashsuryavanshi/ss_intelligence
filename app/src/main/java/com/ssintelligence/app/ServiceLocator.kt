@@ -6,6 +6,12 @@ import androidx.work.WorkManager
 import com.ssintelligence.app.data.database.SsIntelligenceDatabase
 import com.ssintelligence.app.data.media.MediaStoreScreenshotSource
 import com.ssintelligence.app.data.media.ScreenshotSource
+import com.ssintelligence.app.assistant.AssistantRepository
+import com.ssintelligence.app.assistant.AssistantRepositoryImpl
+import com.ssintelligence.app.assistant.AssistantRetriever
+import com.ssintelligence.app.assistant.EvidenceContextBuilder
+import com.ssintelligence.app.assistant.EvidenceRanker
+import com.ssintelligence.app.assistant.ScreenshotAssistant
 import com.ssintelligence.app.data.repository.SearchHistoryRepositoryImpl
 import com.ssintelligence.app.data.repository.ScreenshotRepositoryFactory
 import com.ssintelligence.app.data.repository.SemanticRepositoryImpl
@@ -72,6 +78,26 @@ class ServiceLocator private constructor(context: Context) {
 
     val graphRepository: GraphRepository by lazy {
         GraphRepositoryImpl(database.graphDao(), database.screenshotDao(), database.semanticDao())
+    }
+
+    val assistantRepository: AssistantRepository by lazy {
+        AssistantRepositoryImpl(database.assistantDao())
+    }
+
+    /**
+     * The Phase 5 assistant (§1).
+     *
+     * Composes the existing retrieval systems — FTS engine, knowledge graph,
+     * timeline — behind one evidence-first pipeline. No model is required: the
+     * response generator falls back to deterministic templates, so the
+     * assistant is useful the moment the library is indexed.
+     */
+    val assistant: ScreenshotAssistant by lazy {
+        ScreenshotAssistant(
+            retriever = AssistantRetriever(searchEngine, screenshotRepository, graphRepository),
+            ranker = EvidenceRanker(),
+            contextBuilder = EvidenceContextBuilder(),
+        )
     }
 
     val searchEngine: ScreenshotSearchEngine by lazy {

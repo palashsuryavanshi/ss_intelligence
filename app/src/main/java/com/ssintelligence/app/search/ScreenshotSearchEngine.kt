@@ -42,6 +42,18 @@ interface ScreenshotSearchEngine {
      * OCR text. Keystrokes never leave the process.
      */
     fun suggestions(prefix: String): Flow<List<SearchSuggestion>>
+
+    /**
+     * Pure text search, bypassing content-type classification.
+     *
+     * The structured path treats "otp" as a content-type filter on the
+     * `extracted_otps` table, which is correct for the search screen but wrong
+     * for a question like "What was the OTP?" — the user wants the screenshot
+     * containing the code, not a filter on a table that may be empty. This
+     * method runs the same FTS match with no content-type constraint, so the
+     * assistant can fall back to it when the structured search finds nothing.
+     */
+    suspend fun textSearch(query: String, limit: Int = 60): List<SearchResult>
 }
 
 /** Maps a ranked result to the row shape the UI lists. */

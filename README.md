@@ -29,6 +29,15 @@ with events and sequences, manual collections, side-by-side comparison, and a
 near-duplicate view. The visual index is a perceptual hash and a set of geometric rules —
 no model to download, no permission added, still no network.
 
+Phase 5 adds a conversational layer over all of it. The assistant answers questions from the
+indexed screenshots — "What price did I see for the Pixel 9a?", "What did I save about
+Japan?", "Which had the lowest price?" — using the same local retrieval, ranking and graph,
+and it always shows the screenshots an answer came from. It is evidence-first by
+construction: retrieval runs before any answer text exists, and a validator strips any
+claim that does not trace back to a retrieved screenshot. No generative model is required;
+the answer layer is deterministic templates over extracted facts, so the assistant is
+useful the moment the library is indexed and stays fully offline.
+
 ---
 
 ## Table of contents
@@ -47,6 +56,7 @@ no model to download, no permission added, still no network.
 - [Visual intelligence](#visual-intelligence)
 - [Knowledge graph](#knowledge-graph)
 - [Organization](#organization)
+- [Assistant](#assistant)
 - [Performance notes](#performance-notes)
 - [Accessibility](#accessibility)
 - [Logging](#logging)
@@ -192,7 +202,13 @@ Everything below was run on an emulator (API 36 / SDK 37) rather than assumed:
   categories; Settings reported a measured storage breakdown (328 KB screenshots + extracted,
   92 KB text index, 332 KB text vectors, 12 KB image data, 60 KB graph, models
   `built in (0 B)`) adding up inside a 1.3 MB database
-- 365 unit tests and 90 instrumented tests pass; release build succeeds under R8 with no
+- Phase 5 verified on-device: the assistant screen opened with suggestions derived from the
+  real corpus ("What did I save recently?", "Find screenshots that look like this"); "What did
+  I save about bookmarks" returned **8 screenshots** with their hosts and tappable source
+  cards; "What prices did I see for Pixel 9a" answered honestly with **"I couldn't find a
+  screenshot with that information"** because this library contains no Pixel 9a — the
+  no-evidence path working as designed rather than inventing an answer
+- 400 unit tests and 96 instrumented tests pass; release build succeeds under R8 with no
   `INTERNET` permission
 
 Five bugs were found only by running this on a device, and all are now fixed and covered by
@@ -266,17 +282,20 @@ validated a schema the current migration code never produced.
 ./gradlew connectedDebugAndroidTest  # Room + full search engine, requires a device/emulator
 ```
 
-**365 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
+**400 local unit tests** cover URL, price, phone, date and OTP extraction, content hashing,
 screenshot heuristics, FTS query construction, the whole Phase 2 search layer (query parser
 and each sub-parser, intent classification, ranker, snippets, currency rendering), the
 Phase 3 semantic layer (deterministic embeddings, concept expansion, hybrid scoring,
-rule classification, extractive summaries, entities, sensitive flags, smart groups), and the
+rule classification, extractive summaries, entities, sensitive flags, smart groups), the
 Phase 4 layers (perceptual hashing, palette analysis, layout geometry, screenshot-type
 classification, entity normalization, product-naming rules, graph building, comparison, the
-visual query parser). The search, semantic, vision and graph layers are deliberately free of
-Android dependencies so they are testable as plain JVM code.
+visual query parser), and the Phase 5 assistant (intent detection, entity and price
+extraction, temporal windows, pronoun resolution across turns, normalized evidence
+ranking, answer grounding, and the anti-hallucination validator). The search, semantic,
+vision, graph and assistant layers are deliberately free of Android dependencies so they
+are testable as plain JVM code.
 
-**90 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
+**96 instrumented tests** cover the database (insert, update, delete, cascade behaviour, FTS
 search, search ranking, filters, duplicate lookup, the pending queue, stale-work recovery,
 incremental re-indexing, keyset pagination, index rebuild and OTP isolation from search),
 both schema migrations — all three, from v1, v2 and v3 — the complete Phase 2 engine against a
@@ -290,7 +309,11 @@ long-screenshot queries, search-by-image with and without text, visual-only sear
 no-results rather than browsing, entity pages with prices and websites, cascade integrity
 (shared entities survive, orphans are swept), collection membership, timeline grouping, event
 and sequence detection, comparison, the v3→v4 migration, and the analyzer over synthetic
-pixels — plus a 10,000-row performance suite.
+pixels — plus the Phase 5 assistant pipeline end to end: a price question finding the
+cheapest and citing it, an entity question resolving through the graph, a no-evidence
+question answering honestly, a multi-turn follow-up resolving the previous entity, an OTP
+question masked behind a reveal, and a temporal question using the real window — plus a
+10,000-row performance suite.
 
 One test is worth calling out because it guards a real bug found during development:
 `searchMatchesMultipleTermsAsAnd` asserts both that multi-term search works *and* that the
@@ -409,7 +432,7 @@ Notes:
 
 ## Database schema
 
-Room, version 4, with exported schemas in `app/schemas/`.
+Room, version 5, with exported schemas in `app/schemas/`.
 
 ### `screenshots`
 
@@ -469,13 +492,14 @@ is never synced anywhere.
 
 ### Schema version
 
-`version = 4`, with three explicit migrations:
+`version = 5`, with four explicit migrations:
 
 | Migration | Adds |
 |---|---|
 | `MIGRATION_1_2` | `search_history` |
 | `MIGRATION_2_3` | `screenshot_embeddings`, `screenshot_categories` |
 | `MIGRATION_3_4` | `screenshot_visuals`, `graph_entities`, `graph_relations`, `collections`, `collection_members` |
+| `MIGRATION_4_5` | `assistant_conversations`, `assistant_messages`, `assistant_evidence`, `memory_snapshots`, `memory_snapshot_items` |
 
 There is deliberately **no destructive fallback**: silently dropping a user's index because a
 version changed is exactly the failure mode the explicit "Clear index" control exists to
@@ -1082,6 +1106,90 @@ When page accounting is unavailable the section says so instead of guessing. Eac
 component can also be deleted independently — image embeddings, automatic categories, the
 graph — and none of those actions touches screenshots, OCR text, extracted data, user
 collections, or category corrections.
+
+---
+
+## Assistant
+
+Phase 5 adds a conversational layer over the whole index. The assistant answers questions
+from the indexed screenshots and always shows the screenshots an answer came from.
+
+### Evidence first
+
+The pipeline order is fixed by design, and the order is the guarantee:
+
+```
+User question → QueryInterpreter → AssistantRetriever → EvidenceRanker
+              → EvidenceContextBuilder → LocalResponseGenerator → ResponseValidator
+```
+
+Retrieval runs **before** any answer text exists, so an answer can never be produced from
+nothing. The validator runs **last** and strips any sentence whose claims — prices, years,
+websites, counts — do not trace back to a retrieved screenshot. A count larger than the
+evidence is removed; an unsupported price is removed; a sensitive value is masked.
+
+### Query understanding
+
+`QueryInterpreter` is deterministic and local. It detects intent (search, find, compare,
+summarize, count, timeline, price history, entity lookup, relationship, change detection,
+recall, explain), extracts the entity, the price constraint, the temporal window and any
+visual hint. Temporal expressions resolve against the real calendar — "last month" is the
+previous calendar month, "recently" is a two-week window — never a hallucinated date.
+
+Multi-turn context is carried in a small `AssistantContext`: the last entity, price filter,
+date window and evidence ids. "Which had the lowest price?" inherits the entity from the
+previous turn, and a follow-up with no text match reuses the previous evidence rather than
+searching the library again — so a pronoun-only question never answers "I couldn't find…".
+
+### Retrieval and ranking
+
+`AssistantRetriever` composes the existing systems — the FTS engine, the knowledge graph,
+the timeline — and enriches each candidate with which grounding signals fired. When the
+structured search finds nothing, it falls back to a pure text search over the raw question:
+the engine classifies "otp" as a content-type filter on the `extracted_otps` table (correct
+for the search screen), but "What was the OTP?" wants the screenshot containing the code, so
+the assistant searches the text directly.
+
+`EvidenceRanker` normalizes every signal to [0, 1] before combining — engine order, entity
+hit, temporal hit, graph reference — with configurable internal weights. No single signal
+dominates unless weighted to.
+
+### Answers without a model
+
+No generative model is installed, and none is required. `LocalResponseGenerator` produces
+deterministic answers per intent from the evidence facts: a price answer reports the observed
+range and the lowest, a timeline answer states the window, a comparison answer lists the
+differing prices and websites. A future local LLM slots in front of the same retrieval and
+validation without touching either.
+
+Every answer carries a `ConfidenceType` — "Multiple matching screenshots", "Found in 1
+screenshot", "Possible match", "No exact match found" — never a fabricated percentage. When
+there is no evidence, the answer is the honest "I couldn't find a screenshot with that
+information", never a guess.
+
+### Sensitive content
+
+Sensitivity is computed per evidence row from the existing `SensitiveContentDetector`.
+Banking, identity and password content is highly sensitive; OTP, payment and private chat are
+sensitive. A highly sensitive answer is masked by default and sets `requiresReveal`, so the
+UI can gate it behind an explicit reveal. Sensitive values never appear in suggestions, and
+no notification is generated from assistant output.
+
+### Storage and controls
+
+Conversations, messages, evidence references and memory snapshots live in five new tables
+(`assistant_conversations`, `assistant_messages`, `assistant_evidence`, `memory_snapshots`,
+`memory_snapshot_items`), all referencing screenshots by id and never copying images. A
+memory snapshot is a reusable, user-saved answer that references real records. Conversation
+history can be cleared wholesale, and clearing it never touches the screenshot index.
+
+### Entry points
+
+- **Home** — "Ask your screenshots" opens the assistant.
+- **Detail page** — "Ask about this screenshot" opens the assistant with that screenshot as
+  the subject.
+- **Browse** — long-press to multi-select, then "Ask about these screenshots" for a
+  comparative question over the selection.
 
 ---
 

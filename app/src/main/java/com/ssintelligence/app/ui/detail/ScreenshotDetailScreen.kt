@@ -73,6 +73,7 @@ fun ScreenshotDetailScreen(
     onExploreEntity: (Long) -> Unit = {},
     onSearchDomain: (String) -> Unit = {},
     onFindVisuallySimilar: () -> Unit = {},
+    onAskAbout: (Long) -> Unit = {},
     viewModel: ScreenshotDetailViewModel = viewModel(
         factory = ScreenshotDetailViewModel.Factory(locator, screenshotId)
     ),
@@ -334,6 +335,7 @@ fun ScreenshotDetailScreen(
                         onCompare = { onCompare(screenshotId) },
                         onDomain = onSearchDomain,
                         onEntity = onExploreEntity,
+                        onAsk = { onAskAbout(screenshotId) },
                     )
                 }
             }
@@ -506,6 +508,7 @@ private fun ContextActions(
     onCompare: () -> Unit,
     onDomain: (String) -> Unit,
     onEntity: (Long) -> Unit,
+    onAsk: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         actions.forEach { action ->
@@ -531,6 +534,8 @@ private fun ContextActions(
                 )
             }
         }
+        // Always available: the assistant treats this screenshot as the subject.
+        ActionRow(label = "Ask about this screenshot", onClick = onAsk)
     }
 }
 

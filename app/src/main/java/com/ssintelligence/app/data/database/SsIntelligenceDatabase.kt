@@ -38,8 +38,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GraphRelationRow::class,
         CollectionRow::class,
         CollectionMemberRow::class,
+        AssistantConversationEntity::class,
+        AssistantMessageEntity::class,
+        AssistantEvidenceEntity::class,
+        MemorySnapshotEntity::class,
+        MemorySnapshotItemEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class SsIntelligenceDatabase : RoomDatabase() {
@@ -55,6 +60,8 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
     abstract fun graphDao(): GraphDao
 
     abstract fun collectionDao(): CollectionDao
+
+    abstract fun assistantDao(): AssistantDao
 
     companion object {
         const val NAME = "ss_intelligence.db"
@@ -140,6 +147,82 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_screenshot_categories_category` " +
                         "ON `screenshot_categories` (`category`)",
                 )
+            }
+        }
+
+        /**
+         * v4 → v5 adds the assistant conversation store and memory snapshots.
+         *
+         * Everything here is additive: no existing table changes, so the live
+         * index is untouched. Evidence, messages and snapshots carry only ids
+         * and text; no screenshot bytes are copied.
+         */
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `assistant_conversations` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL,
+                        `updated_at` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_conversations_updated_at` ON `assistant_conversations` (`updated_at`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `assistant_messages` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `conversation_id` INTEGER NOT NULL,
+                        `role` TEXT NOT NULL,
+                        `text` TEXT NOT NULL,
+                        `intent` TEXT,
+                        `created_at` INTEGER NOT NULL,
+                        FOREIGN KEY(`conversation_id`) REFERENCES `assistant_conversations`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_messages_conversation_id` ON `assistant_messages` (`conversation_id`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `assistant_evidence` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `message_id` INTEGER NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        FOREIGN KEY(`message_id`) REFERENCES `assistant_messages`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_evidence_message_id` ON `assistant_evidence` (`message_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_assistant_evidence_screenshot_id` ON `assistant_evidence` (`screenshot_id`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `memory_snapshots` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `summary` TEXT NOT NULL,
+                        `created_at` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_memory_snapshots_created_at` ON `memory_snapshots` (`created_at`)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `memory_snapshot_items` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `snapshot_id` INTEGER NOT NULL,
+                        `screenshot_id` INTEGER NOT NULL,
+                        FOREIGN KEY(`snapshot_id`) REFERENCES `memory_snapshots`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_memory_snapshot_items_snapshot_id` ON `memory_snapshot_items` (`snapshot_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_memory_snapshot_items_screenshot_id` ON `memory_snapshot_items` (`screenshot_id`)")
             }
         }
 
@@ -256,7 +339,7 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
 
         fun build(context: Context): SsIntelligenceDatabase =
             Room.databaseBuilder(context.applicationContext, SsIntelligenceDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 // No destructive fallback: losing an index silently would be
                 // worse than a visible error. "Clear Index" in Settings is the
                 // explicit recovery path.

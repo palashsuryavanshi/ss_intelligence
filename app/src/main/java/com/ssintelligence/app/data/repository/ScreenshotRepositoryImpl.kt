@@ -205,6 +205,15 @@ class ScreenshotRepositoryImpl(
 
     override suspend fun getById(id: Long): Screenshot? = dao.getById(id)?.toDomain()
 
+    override suspend fun getRecent(limit: Int): List<Screenshot> =
+        dao.recentRows(limit).map { it.toDomain() }
+
+    override suspend fun getByIds(ids: List<Long>): List<Screenshot> {
+        if (ids.isEmpty()) return emptyList()
+        val rows = dao.getByIds(ids).associateBy { it.id }
+        return ids.mapNotNull { rows[it]?.toDomain() }
+    }
+
     override suspend fun getDetail(id: Long): ScreenshotDetail? {
         val row = dao.getById(id) ?: return null
         return ScreenshotDetail(

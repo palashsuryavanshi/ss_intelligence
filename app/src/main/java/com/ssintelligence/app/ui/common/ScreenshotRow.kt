@@ -1,5 +1,7 @@
 package com.ssintelligence.app.ui.common
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,11 +25,15 @@ import com.ssintelligence.app.domain.model.Screenshot
  * OCR excerpt. The row is one semantics node so TalkBack reads it as a
  * sentence rather than five fragments (§37).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ScreenshotRow(
     screenshot: Screenshot,
     onClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    /** Selection state for the browse screen's "ask about these" mode (§15). */
+    selected: Boolean = false,
+    onLongClick: ((Long) -> Unit)? = null,
 ) {
     val preview = screenshot.ocrPreview()
     val spokenSummary = buildString {
@@ -41,9 +47,23 @@ fun ScreenshotRow(
         onClick = { onClick(screenshot.id) },
         modifier = modifier
             .fillMaxWidth()
-            .semantics { contentDescription = spokenSummary },
+            .semantics { contentDescription = spokenSummary }
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = { onClick(screenshot.id) },
+                        onLongClick = { onLongClick(screenshot.id) },
+                    )
+                } else {
+                    Modifier
+                },
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
         ),
     ) {
         Row(

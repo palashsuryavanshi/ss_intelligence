@@ -75,6 +75,39 @@ class LocalSearchEngine(
 
     override suspend fun parse(query: String): SearchQuery = parser.parse(query)
 
+    override suspend fun textSearch(query: String, limit: Int): List<SearchResult> {
+        // Tokenize directly rather than going through the parser: "otp" is
+        // classified as a content type by the parser, so it never reaches
+        // ftsTerms. A text search must look for the word itself.
+        val terms = query.lowercase()
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.isNotBlank() && it !in com.ssintelligence.app.search.parser.StopWords.internal }
+            .distinct()
+        val ftsQuery = FtsQueryBuilder.buildFromTerms(terms) ?: return emptyList()
+        val like = likeArguments(query)
+        val rows = dao.searchByText(
+            ftsQuery = ftsQuery,
+            prefixQuery = like.first,
+            containsQuery = like.second,
+            minDateSeconds = null,
+            maxDateSeconds = null,
+            priceMin = null,
+            priceMax = null,
+            priceCurrency = null,
+            phone = null,
+            domain = null,
+            otp = null,
+            filterTypes = "",
+            color = null,
+            longOnly = false,
+            limit = limit,
+        )
+        if (rows.isEmpty()) return emptyList()
+        val candidates = hydrate(rows)
+        val ranked = ranker.rank(parser.parse(query), candidates, clock())
+        return ranked.map { it.toResult() }
+    }
+
     override suspend fun search(request: SearchRequest): SearchResponse {
         val startedAt = clock()
         val parsed = parser.parse(request.query)

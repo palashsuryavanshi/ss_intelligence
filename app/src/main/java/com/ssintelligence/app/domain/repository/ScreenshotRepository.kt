@@ -13,6 +13,12 @@ import kotlinx.coroutines.flow.Flow
 interface ScreenshotRepository {
     fun observeStats(): Flow<IndexingStats>
     fun observeRecent(limit: Int): Flow<List<Screenshot>>
+
+    /** One-shot recent read, for suggestion generation and assistant context. */
+    suspend fun getRecent(limit: Int): List<Screenshot>
+
+    /** One-shot batch read by id, for multi-turn evidence reuse. */
+    suspend fun getByIds(ids: List<Long>): List<Screenshot>
     fun observeScreenshot(id: Long): Flow<Screenshot?>
     fun observeDetail(id: Long): Flow<ScreenshotDetail?>
     fun observeDuplicateGroups(limit: Int): Flow<List<DuplicateGroup>>
