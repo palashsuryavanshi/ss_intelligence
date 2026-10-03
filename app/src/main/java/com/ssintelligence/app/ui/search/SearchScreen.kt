@@ -352,7 +352,7 @@ private fun ResultsContent(
             ResultCountLine(state = state)
         }
 
-        items(state.results, key = { it.screenshot.id }) { result ->
+        items(state.results, key = { it.screenshot.id }, contentType = { "result" }) { result ->
             SearchResultCard(
                 result = result,
                 onClick = { onOpenScreenshot(result.screenshot.id) },

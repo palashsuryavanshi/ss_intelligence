@@ -294,7 +294,7 @@ private fun ComparePicker(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(recent.filter { it.id != firstId }, key = { it.id }) { screenshot ->
+            items(recent.filter { it.id != firstId }, key = { it.id }, contentType = { "screenshot" }) { screenshot ->
                 ScreenshotRow(
                     screenshot = screenshot,
                     onClick = { onPick(screenshot.id) },

@@ -153,8 +153,10 @@ fun Screenshot.errorMessage(): String? = when (status) {
 }
 
 /** One-line OCR excerpt, whitespace-collapsed and clipped (§23). */
+private val WHITESPACE_REGEX = Regex("\\s+")
+
 fun Screenshot.ocrPreview(maxLength: Int = 140): String? {
-    val collapsed = ocrText.replace(Regex("\\s+"), " ").trim()
+    val collapsed = ocrText.replace(WHITESPACE_REGEX, " ").trim()
     if (collapsed.isEmpty()) return null
     return if (collapsed.length <= maxLength) collapsed else collapsed.take(maxLength).trimEnd() + "…"
 }

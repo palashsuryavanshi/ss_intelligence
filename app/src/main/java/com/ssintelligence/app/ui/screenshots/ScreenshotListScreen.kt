@@ -138,7 +138,7 @@ fun ScreenshotListScreen(
                     )
                 }
             } else {
-                items(screenshots, key = { it.id }) { screenshot ->
+                items(screenshots, key = { it.id }, contentType = { "screenshot" }) { screenshot ->
                     val selected = screenshot.id in selection
                     ScreenshotRow(
                         screenshot = screenshot,

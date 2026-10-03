@@ -259,7 +259,7 @@ fun HomeScreen(
                 item("recent-header") {
                     SectionHeader("Recent screenshots")
                 }
-                items(recent, key = { it.id }) { screenshot ->
+                items(recent, key = { it.id }, contentType = { "screenshot" }) { screenshot ->
                     ScreenshotRow(
                         screenshot = screenshot,
                         onClick = onOpenScreenshot,

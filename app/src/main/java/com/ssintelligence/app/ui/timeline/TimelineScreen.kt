@@ -130,7 +130,7 @@ fun TimelineScreen(
                         )
                     }
                 }
-                items(day.screenshots, key = { it.id }) { screenshot ->
+                items(day.screenshots, key = { it.id }, contentType = { "screenshot" }) { screenshot ->
                     ScreenshotRow(screenshot = screenshot, onClick = { onOpenScreenshot(screenshot.id) })
                 }
             }

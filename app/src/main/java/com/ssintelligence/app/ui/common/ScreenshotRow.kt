@@ -12,6 +12,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -25,6 +26,9 @@ import com.ssintelligence.app.ui.theme.SsColors
  * A single screenshot in a list (§23): thumbnail, filename, date and a short
  * OCR excerpt. The row is one semantics node so TalkBack reads it as a
  * sentence rather than five fragments (§37).
+ *
+ * Derived strings are computed once per screenshot id, not on every
+ * recomposition, so fast scrolling never re-parses OCR text.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -36,87 +40,133 @@ fun ScreenshotRow(
     selected: Boolean = false,
     onLongClick: ((Long) -> Unit)? = null,
 ) {
-    val preview = screenshot.ocrPreview()
-    val spokenSummary = buildString {
-        append("Screenshot ${screenshot.filename}, taken ${DateFormats.formatDate(screenshot.dateAdded)}")
-        append(", ${screenshot.status.name.lowercase().replaceFirstChar { it.uppercase() }}")
-        if (preview != null) append(". Contains text: $preview")
-        if (screenshot.isDuplicate) append(". Exact duplicate of another screenshot")
+    // Computed once per item: scrolling reuses compositions without redoing
+    // string work.
+    val preview = remember(screenshot.id, screenshot.ocrText) {
+        screenshot.ocrPreview()
+    }
+    val dateAdded = remember(screenshot.id, screenshot.dateAdded) {
+        DateFormats.formatDateTime(screenshot.dateAdded)
+    }
+    val statusLabel = remember(screenshot.id, screenshot.status) {
+        screenshot.status.name.lowercase().replaceFirstChar { it.uppercase() }
+    }
+    val spokenSummary = remember(screenshot.id, screenshot.filename, preview, statusLabel) {
+        buildString {
+            append("Screenshot ${screenshot.filename}, taken ${DateFormats.formatDate(screenshot.dateAdded)}")
+            append(", $statusLabel")
+            if (preview != null) append(". Contains text: $preview")
+            if (screenshot.isDuplicate) append(". Exact duplicate of another screenshot")
+        }
     }
 
-    Card(
-        onClick = { onClick(screenshot.id) },
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics { contentDescription = spokenSummary }
-            .then(
-                if (onLongClick != null) {
-                    Modifier.combinedClickable(
-                        onClick = { onClick(screenshot.id) },
-                        onLongClick = { onLongClick(screenshot.id) },
-                    )
+    // A row is either tap-only (Card handles the click) or tap-and-hold (the
+    // combinedClickable handles both). Never both: two click handlers would
+    // fire navigation twice and double the input work per tap.
+    if (onLongClick != null) {
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = spokenSummary }
+                .combinedClickable(
+                    onClick = { onClick(screenshot.id) },
+                    onLongClick = { onLongClick(screenshot.id) },
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (selected) {
+                    SsColors.NavyPrimary
                 } else {
-                    Modifier
+                    SsColors.Surface
                 },
             ),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) {
-                SsColors.NavyPrimary
-            } else {
-                SsColors.Surface
-            },
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenshotThumbnail(
+            ScreenshotRowContent(
                 screenshot = screenshot,
-                modifier = thumbnailModifier(),
-                contentDescription = null, // described by the row instead
+                preview = preview,
+                dateAdded = dateAdded,
+                statusLabel = statusLabel,
             )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+        }
+    } else {
+        Card(
+            onClick = { onClick(screenshot.id) },
+            modifier = modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = spokenSummary },
+            colors = CardDefaults.cardColors(
+                containerColor = if (selected) {
+                    SsColors.NavyPrimary
+                } else {
+                    SsColors.Surface
+                },
+            ),
+        ) {
+            ScreenshotRowContent(
+                screenshot = screenshot,
+                preview = preview,
+                dateAdded = dateAdded,
+                statusLabel = statusLabel,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScreenshotRowContent(
+    screenshot: Screenshot,
+    preview: String?,
+    dateAdded: String,
+    statusLabel: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        ScreenshotThumbnail(
+            screenshot = screenshot,
+            modifier = thumbnailModifier(),
+            contentDescription = null, // described by the row instead
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = screenshot.filename,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = dateAdded,
+                style = MaterialTheme.typography.bodySmall,
+                color = SsColors.TextSecondary,
+            )
+            Text(
+                text = preview ?: "No text found yet",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (preview == null) {
+                    SsColors.TextSecondary
+                } else {
+                    SsColors.TextPrimary
+                },
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                modifier = Modifier.padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = screenshot.filename,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = DateFormats.formatDateTime(screenshot.dateAdded),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SsColors.TextSecondary,
-                )
-                Text(
-                    text = preview ?: "No text found yet",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (preview == null) {
-                        SsColors.TextSecondary
-                    } else {
-                        SsColors.TextPrimary
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Row(
-                    modifier = Modifier.padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    StatusChip(screenshot.status)
-                    if (screenshot.isDuplicate) {
-                        Text(
-                            text = "Duplicate",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = SsColors.TextSecondary,
-                        )
-                    }
+                StatusChip(screenshot.status)
+                if (screenshot.isDuplicate) {
+                    Text(
+                        text = "Duplicate",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = SsColors.TextSecondary,
+                    )
                 }
             }
         }
