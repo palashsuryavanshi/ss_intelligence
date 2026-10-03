@@ -59,6 +59,7 @@ import com.ssintelligence.app.ui.common.MetadataRow
 import com.ssintelligence.app.ui.common.OtpRevealRow
 import com.ssintelligence.app.ui.common.ScreenshotImage
 import com.ssintelligence.app.ui.common.SectionHeader
+import com.ssintelligence.app.ui.common.SelectableMarkdownOcrText
 import com.ssintelligence.app.ui.common.StatusChip
 import com.ssintelligence.app.ui.common.errorMessage
 import com.ssintelligence.app.ui.theme.OcrTextStyle
@@ -320,20 +321,41 @@ fun ScreenshotDetailScreen(
                     // The outer LazyColumn already scrolls, so the OCR text is
                     // a plain capped block rather than a nested scroll view —
                     // nesting two scrollables breaks measurement.
+                    var ocrExpanded by remember(current.screenshot.id) { mutableStateOf(false) }
                     Card(
                         colors = CardDefaults.cardColors(
                             containerColor = SsColors.Surface,
                         ),
                     ) {
-                        Text(
-                            text = current.screenshot.ocrText,
-                            style = OcrTextStyle,
-                            maxLines = OCR_MAX_VISIBLE_LINES,
-                            overflow = TextOverflow.Ellipsis,
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(12.dp),
-                        )
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            // Markdown-rendered and selectable: long-press to
+                            // select any portion and copy it.
+                            SelectableMarkdownOcrText(
+                                text = current.screenshot.ocrText,
+                                maxLines = if (ocrExpanded) Int.MAX_VALUE else OCR_MAX_VISIBLE_LINES,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            val lineCount = current.screenshot.ocrText.lines().size
+                            if (lineCount > OCR_MAX_VISIBLE_LINES) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    TextButton(
+                                        onClick = { ocrExpanded = !ocrExpanded },
+                                    ) {
+                                        Text(
+                                            text = if (ocrExpanded) "Show less" else "Show more",
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
