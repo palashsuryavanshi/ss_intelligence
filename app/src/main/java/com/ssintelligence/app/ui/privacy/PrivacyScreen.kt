@@ -54,7 +54,7 @@ fun PrivacyScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Privacy") },
+                title = { Text("Privacy & Diagnostics") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -119,20 +119,35 @@ class PrivacyViewModel(
             val stats = runCatching { repository.countByStatus() }.getOrDefault(emptyMap())
             val total = stats.values.sum()
             val completed = stats["COMPLETED"] ?: 0
+            val pending = stats["PENDING"] ?: 0
+            val failed = stats["FAILED"] ?: 0
             val sensitive = runCatching {
-                // Sensitive content is counted from the assistant's evidence flags,
-                // never by logging the content itself.
                 locator.autonomousRepository.topics().size
             }.getOrDefault(0)
+            val dbSize = runCatching { repository.databaseSizeBytes() }.getOrDefault(0L)
+            val storage = runCatching { repository.storageBreakdown() }.getOrNull()
             _metrics.value = listOf(
                 Metric("Screenshots analyzed", total.toString()),
                 Metric("OCR processed", completed.toString()),
+                Metric("Pending indexing", pending.toString()),
+                Metric("Failed indexing", failed.toString()),
                 Metric("Embeddings stored locally", completed.toString()),
                 Metric("Cloud uploads", "0 (no INTERNET permission)"),
                 Metric("Sensitive content detected", "$sensitive topics flagged"),
                 Metric("Sensitive content protected", "masked behind reveal"),
                 Metric("Assistant history", "stored on this device only"),
+                Metric("Database size", formatBytes(dbSize)),
+                Metric("Storage", storage?.let { "DB: ${formatBytes(it.databaseBytes)}, Screenshots: ${formatBytes(it.screenshotsBytes)}" } ?: "unavailable"),
             )
+        }
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        return when {
+            bytes >= 1_073_741_824 -> "%.1f GB".format(bytes / 1_073_741_824.0)
+            bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
+            bytes >= 1024 -> "%.1f KB".format(bytes / 1024.0)
+            else -> "$bytes B"
         }
     }
 
