@@ -8,9 +8,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 
 /**
- * Material 3 type scale with slightly tightened tracking for the dense
- * screenshot-list rows, plus a monospace style for OCR text so digit
- * sequences and amounts stay legible.
+ * AMOLED-first typography system (§4).
+ *
+ * Clear hierarchy, excellent readability, compact but comfortable spacing.
+ * Strong distinction between title, description and metadata.
  */
 val SsTypography = Typography(
     displaySmall = TextStyle(
@@ -42,7 +43,7 @@ val SsTypography = Typography(
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.15.sp,
+        letterSpacing = 0.1.sp,
     ),
     titleSmall = TextStyle(
         fontFamily = FontFamily.Default,
@@ -56,21 +57,21 @@ val SsTypography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.5.sp,
+        letterSpacing = 0.15.sp,
     ),
     bodyMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.25.sp,
+        letterSpacing = 0.15.sp,
     ),
     bodySmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.4.sp,
+        letterSpacing = 0.2.sp,
     ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.Default,
@@ -84,14 +85,14 @@ val SsTypography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.5.sp,
+        letterSpacing = 0.3.sp,
     ),
     labelSmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.5.sp,
+        letterSpacing = 0.3.sp,
     ),
 )
 

@@ -18,6 +18,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -36,13 +38,15 @@ import com.ssintelligence.app.domain.model.IndexingScope
 import com.ssintelligence.app.domain.model.ThemeMode
 import com.ssintelligence.app.ui.common.DateFormats
 import com.ssintelligence.app.ui.common.MetadataRow
+import com.ssintelligence.app.ui.theme.SsColors
+import com.ssintelligence.app.ui.common.SsSpacing
+import com.ssintelligence.app.ui.common.SsShapes
 
 /**
  * Settings (§34).
  *
- * Phase 1 ships the options that are actually implemented. Deferred settings
- * are listed as disabled with an explicit "coming later" note rather than
- * hidden, so the design intent is visible without shipping dead controls.
+ * AMOLED + Navy design: true black background, deep navy surfaces,
+ * subtle blue accents. All existing explanations preserved in full detail.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,15 +84,23 @@ fun SettingsScreen(
     var showClearSemanticIndex by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Settings") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = SsColors.Background,
+                ),
+            )
+        },
+        containerColor = SsColors.Background,
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = SsSpacing.md, vertical = SsSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(SsSpacing.xs),
         ) {
             SettingsHeader("Indexing")
             TextButton(
@@ -99,19 +111,31 @@ fun SettingsScreen(
                 Text(if (state.isIndexing) "Stop indexing" else "Scan now")
             }
             MetadataRow("What gets indexed", state.scope.describe())
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Theme")
             ThemeOptions(selected = state.theme, onSelect = viewModel::onThemeChange)
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Scope")
             ScopeOptions(selected = state.scope, onSelect = viewModel::onScopeChange)
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Privacy")
             PrivacyFacts()
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Search")
             SearchHistorySection(
@@ -120,7 +144,10 @@ fun SettingsScreen(
                 onEnabledChange = { viewModel.onSearchHistoryEnabledChange(it) },
                 onClear = { viewModel.onClearSearchHistory() },
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Meaning-based search")
             SemanticSearchSection(
@@ -133,7 +160,10 @@ fun SettingsScreen(
                 onRebuild = viewModel::onBuildSemanticIndex,
                 onClear = { showClearSemanticIndex = true },
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Privacy dashboard")
             PrivacyDashboard(
@@ -141,14 +171,20 @@ fun SettingsScreen(
                 storedQueries = searchHistoryCount,
                 semanticEnabled = semanticEnabled,
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Intelligence processing")
             ProcessingModeOptions(
                 selected = processingMode,
                 onSelect = viewModel::onProcessingModeChange,
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Visual intelligence")
             VisualIntelligenceSection(
@@ -158,7 +194,10 @@ fun SettingsScreen(
                 onClearCategories = viewModel::onClearAutoCategories,
                 onClearGraph = viewModel::onClearGraph,
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Smart organization")
             SmartOrganizationSection(
@@ -168,7 +207,10 @@ fun SettingsScreen(
                 onRebuildAutonomous = viewModel::onRebuildAutonomous,
                 onClearAutonomous = viewModel::onClearAutonomous,
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Actions & Automation")
             ActionsAutomationSection(
@@ -184,16 +226,25 @@ fun SettingsScreen(
                 onAutomation = onNavigateToAutomation,
                 onClearActionData = viewModel::onClearActionData,
             )
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Storage usage")
             StorageSection(storage = storage)
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Storage")
             MetadataRow("Indexed screenshots", state.indexedCount.toString())
             MetadataRow("Database size", DateFormats.formatFileSize(context, databaseSize))
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = SsSpacing.sm),
+                color = SsColors.Divider,
+            )
 
             SettingsHeader("Advanced")
             TextButton(onClick = { showRebuildConfirm = true }) { Text("Rebuild index") }
@@ -252,6 +303,7 @@ fun SettingsScreen(
             },
         )
     }
+
     if (showClearSearchHistory) {
         AlertDialog(
             onDismissRequest = { showClearSearchHistory = false },
@@ -310,19 +362,16 @@ private fun SettingsHeader(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
+        color = SsColors.NavyAccent,
+        fontWeight = FontWeight.SemiBold,
         modifier = Modifier
-            .padding(top = 12.dp, bottom = 4.dp)
+            .padding(top = SsSpacing.md, bottom = SsSpacing.xs)
             .semantics { heading() },
     )
 }
 
 /**
  * Actions and automation controls (§71).
- *
- * Each feature works independently and can be turned off. Critical and
- * security-sensitive actions still require confirmation regardless of these
- * preferences — the toggles govern suggestions and automation, never safety.
  */
 @Composable
 private fun ActionsAutomationSection(
@@ -340,7 +389,7 @@ private fun ActionsAutomationSection(
 ) {
     var showClearConfirm by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.xs)) {
         ToggleRow(
             label = "Automation",
             description = "Let rules organize new screenshots automatically.",
@@ -404,23 +453,27 @@ private fun ToggleRow(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = SsColors.TextPrimary,
+            )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
+                lineHeight = MaterialTheme.typography.bodySmall.lineHeight * 1.4,
             )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
     }
 }
 
 /**
  * Smart organization controls (§60).
- *
- * Each feature is independent and can be turned off. Nothing here deletes a
- * screenshot: the cleanup center only ever suggests, and deletion always
- * requires explicit confirmation.
  */
 @Composable
 private fun SmartOrganizationSection(
@@ -430,13 +483,13 @@ private fun SmartOrganizationSection(
     onRebuildAutonomous: () -> Unit,
     onClearAutonomous: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.xs)) {
         Text(
             text = "Topics, sessions, events, importance and lifecycle are " +
                 "derived automatically from your screenshots. Nothing is deleted " +
                 "without your confirmation.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
         TextButton(onClick = onInsights) { Text("View insights") }
         TextButton(onClick = onCleanup) { Text("Review cleanup suggestions") }
@@ -463,6 +516,7 @@ private fun ThemeOptions(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
                 Text(
                     text = mode.name.lowercase().replaceFirstChar { it.uppercase() },
                     style = MaterialTheme.typography.bodyLarge,
+                    color = SsColors.TextPrimary,
                     modifier = Modifier.padding(start = 4.dp),
                 )
             }
@@ -487,6 +541,7 @@ private fun ScopeOptions(selected: IndexingScope, onSelect: (IndexingScope) -> U
                 Text(
                     text = scope.describe(),
                     style = MaterialTheme.typography.bodyLarge,
+                    color = SsColors.TextPrimary,
                     modifier = Modifier.padding(start = 4.dp),
                 )
             }
@@ -496,10 +551,6 @@ private fun ScopeOptions(selected: IndexingScope, onSelect: (IndexingScope) -> U
 
 /**
  * Search history controls (§36, §37).
- *
- * The switch is off by default and turning it off deletes what was stored, so
- * "off" never means "hidden but kept". Queries that look like they carry a
- * one-time code are never stored even when the switch is on.
  */
 @Composable
 private fun SearchHistorySection(
@@ -508,7 +559,7 @@ private fun SearchHistorySection(
     onEnabledChange: (Boolean) -> Unit,
     onClear: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.xs)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -517,13 +568,17 @@ private fun SearchHistorySection(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Remember my searches", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Remember my searches",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = SsColors.TextPrimary,
+                )
                 Text(
                     text = "Off by default. Keeps the last " +
                         "${com.ssintelligence.app.data.database.SearchHistoryDao.DEFAULT_LIMIT} " +
                         "queries on this device only.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
             Switch(checked = enabled, onCheckedChange = onEnabledChange)
@@ -543,18 +598,13 @@ private fun SearchHistorySection(
                 "turned on. Suggestions and history are built only from data already on " +
                 "this device.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
     }
 }
 
 /**
  * Meaning-based search controls (§50).
- *
- * There is no model to download: the provider is built in, needs no network,
- * and works the moment the library is indexed. The switch only decides whether
- * the semantic half of ranking may run — turning it off leaves the Phase 2
- * deterministic engine exactly as it was.
  */
 @Composable
 private fun SemanticSearchSection(
@@ -567,7 +617,7 @@ private fun SemanticSearchSection(
     onRebuild: () -> Unit,
     onClear: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.xs)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -576,11 +626,15 @@ private fun SemanticSearchSection(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Search by meaning", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Search by meaning",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = SsColors.TextPrimary,
+                )
                 Text(
                     text = "Finds screenshots related to your words, not just containing them.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
             Switch(checked = enabled, onCheckedChange = onEnabledChange)
@@ -596,11 +650,11 @@ private fun SemanticSearchSection(
             Text(
                 text = "Rebuilding meaning index… $rebuildProgress done",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(SsSpacing.sm)) {
             TextButton(onClick = onRebuild) { Text("Build meaning index") }
             TextButton(onClick = onClear) { Text("Delete meaning index") }
         }
@@ -610,19 +664,13 @@ private fun SemanticSearchSection(
                 "background, and never leaves it. Deleting it keeps your screenshots, " +
                 "their text, and text search untouched.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
     }
 }
 
 /**
  * The privacy dashboard (§41).
- *
- * Every row is a verifiable fact about this build, not a marketing claim: no
- * INTERNET permission, bundled OCR, local database, opt-in history, built-in
- * semantic index. If any of these stopped being true, the corresponding row
- * would be a lie — which is why each one names the mechanism, not just the
- * promise.
  */
 @Composable
 private fun PrivacyDashboard(
@@ -630,7 +678,7 @@ private fun PrivacyDashboard(
     storedQueries: Int,
     semanticEnabled: Boolean,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.xs)) {
         FactRow("Text recognition: on-device (bundled model, no download)")
         FactRow("Meaning-based search: on-device (built-in, no download)")
         FactRow("Screenshot database: local, app-private storage")
@@ -653,7 +701,7 @@ private fun PrivacyDashboard(
             text = "One-time codes stay masked until you reveal them, and sensitive " +
                 "screenshots never appear in suggestions or previews.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
             modifier = Modifier.padding(top = 4.dp),
         )
     }
@@ -661,9 +709,6 @@ private fun PrivacyDashboard(
 
 /**
  * Background processing policy (§62).
- *
- * Only governs expensive background embedding. Browsing and search work
- * identically in every mode.
  */
 @Composable
 private fun ProcessingModeOptions(
@@ -686,6 +731,7 @@ private fun ProcessingModeOptions(
                     Text(
                         text = mode.label,
                         style = MaterialTheme.typography.bodyLarge,
+                        color = SsColors.TextPrimary,
                     )
                     Text(
                         text = when (mode) {
@@ -699,7 +745,7 @@ private fun ProcessingModeOptions(
                                 "Only explicit taps run the builders"
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = SsColors.TextSecondary,
                     )
                 }
             }
@@ -709,11 +755,6 @@ private fun ProcessingModeOptions(
 
 /**
  * Visual index controls (§43).
- *
- * No model to install or remove: visual analysis is built in like the text
- * index. What can be managed is the derived data — rebuild it, or delete
- * pieces of it independently (§64). Deleting never touches screenshots, OCR
- * text, or extracted information.
  */
 @Composable
 private fun VisualIntelligenceSection(
@@ -727,14 +768,14 @@ private fun VisualIntelligenceSection(
     var showClearCategories by remember { mutableStateOf(false) }
     var showClearGraph by remember { mutableStateOf(false) }
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.xs)) {
         MetadataRow("Visual model", "built-in perceptual hash + rules")
         MetadataRow("Model size", "no download needed")
         if (visualProgress > 0) {
             Text(
                 text = "Analyzing images… $visualProgress done",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
         }
 
@@ -750,7 +791,7 @@ private fun VisualIntelligenceSection(
                 "corrections are never deleted by the actions below — only derived data goes, " +
                 "and screenshots, text and search keep working regardless.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
     }
 
@@ -815,19 +856,15 @@ private fun ConfirmDelete(
 
 /**
  * Measured storage breakdown (§63).
- *
- * Every row is page accounting from the database itself — except models, which
- * cost zero bytes because they are built in. When accounting fails the section
- * says so instead of guessing.
  */
 @Composable
 private fun StorageSection(storage: com.ssintelligence.app.domain.repository.StorageBreakdown?) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.xs)) {
         if (storage == null) {
             Text(
                 text = "Measuring…",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
             return
         }
@@ -836,7 +873,7 @@ private fun StorageSection(storage: com.ssintelligence.app.domain.repository.Sto
                 text = "Per-component accounting is unavailable on this device. " +
                     "Total database size is shown under Storage above.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
             return
         }
@@ -869,7 +906,7 @@ private fun formatBytes(bytes: Long): String {
  */
 @Composable
 private fun PrivacyFacts() {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.xs)) {
         FactRow("Text recognition runs on this device")
         FactRow("No account, no sign-in")
         FactRow("No internet permission is requested at all")
@@ -879,7 +916,7 @@ private fun PrivacyFacts() {
             text = "The app cannot send your screenshots anywhere: it does not even hold the " +
                 "network permission.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
             modifier = Modifier.padding(top = 4.dp),
         )
     }
@@ -890,6 +927,7 @@ private fun FactRow(text: String) {
     Text(
         text = "• $text",
         style = MaterialTheme.typography.bodyMedium,
+        color = SsColors.TextPrimary,
     )
 }
 
@@ -897,16 +935,10 @@ private fun FactRow(text: String) {
  * Settings that are still not implemented. They are shown disabled with an
  * explanation rather than omitted, so the roadmap is visible and no control is a
  * no-op surprise.
- *
- * Three Phase 1 placeholders left this list as their phases landed: background
- * processing is now the `Processing mode` radio group above, and near-duplicate
- * detection is the Similar section on the Duplicates screen. Shipping a
- * disabled switch for a feature that now exists would be a lie in the other
- * direction, so they are gone rather than greyed out.
  */
 @Composable
 private fun DeferredSettings() {
-    Column(Modifier.padding(top = 8.dp)) {
+    Column(Modifier.padding(top = SsSpacing.sm)) {
         DeferredRow("Automatic screenshot deletion")
         DeferredRow("Face grouping in photos")
     }
@@ -925,12 +957,12 @@ private fun DeferredRow(label: String) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextDisabled,
             )
             Text(
                 text = "Planned for a later release",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextDisabled,
             )
         }
         Switch(

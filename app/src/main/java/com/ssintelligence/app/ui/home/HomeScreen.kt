@@ -1,31 +1,41 @@
 package com.ssintelligence.app.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,10 +45,16 @@ import com.ssintelligence.app.ui.common.EmptyState
 import com.ssintelligence.app.ui.common.IndexingProgressCard
 import com.ssintelligence.app.ui.common.ScreenshotRow
 import com.ssintelligence.app.ui.common.SectionHeader
+import com.ssintelligence.app.ui.theme.SsColors
+import com.ssintelligence.app.ui.common.SsSpacing
+import com.ssintelligence.app.ui.common.SsShapes
 
 /**
  * Home screen (§22): headline counters, live indexing status, and shortcuts
  * into search, browse, duplicates and settings.
+ *
+ * AMOLED + Navy design: true black background, deep navy surfaces,
+ * subtle blue accents for interactive elements.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +91,13 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SS Intelligence") },
+                title = {
+                    Text(
+                        "SS Intelligence",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                },
                 actions = {
                     IconButton(onClick = onNavigateToSearch) {
                         Icon(Icons.Filled.ContentCopy, contentDescription = "Search screenshots")
@@ -84,21 +106,30 @@ fun HomeScreen(
                         Icon(Icons.Filled.Settings, contentDescription = "Open settings")
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = SsColors.Background,
+                ),
             )
         },
+        containerColor = SsColors.Background,
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = SsSpacing.md,
+                end = SsSpacing.md,
+                top = SsSpacing.sm,
+                bottom = SsSpacing.xl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(SsSpacing.sm),
         ) {
             item("privacy-note") {
                 Text(
                     text = "Everything is processed on this device. No account, no uploads.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
 
@@ -205,24 +236,26 @@ private fun StatsCard(state: ObserveIndexingStatsUseCase.UiState) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = SsColors.Surface,
         ),
+        shape = SsShapes.md,
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(SsSpacing.lg)) {
             Text(
                 text = formatCount(stats.total),
                 style = MaterialTheme.typography.displaySmall,
+                color = SsColors.TextPrimary,
                 modifier = Modifier.semantics { heading() },
             )
             Text(
                 text = if (stats.total == 1) "screenshot indexed" else "screenshots indexed",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp),
+                    .padding(top = SsSpacing.md),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 StatColumn(formatCount(stats.completed), "Text read")
@@ -233,8 +266,8 @@ private fun StatsCard(state: ObserveIndexingStatsUseCase.UiState) {
                 Text(
                     text = "${formatCount(stats.failed)} could not be read and can be retried.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 12.dp),
+                    color = SsColors.Error,
+                    modifier = Modifier.padding(top = SsSpacing.sm),
                 )
             }
         }
@@ -244,11 +277,15 @@ private fun StatsCard(state: ObserveIndexingStatsUseCase.UiState) {
 @Composable
 private fun StatColumn(value: String, label: String) {
     Column(horizontalAlignment = Alignment.Start) {
-        Text(text = value, style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            color = SsColors.TextPrimary,
+        )
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
     }
 }
@@ -271,75 +308,101 @@ private fun ActionRow(
     onActions: () -> Unit,
     onAutomation: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        androidx.compose.material3.Button(onClick = onScanNow, modifier = Modifier.fillMaxWidth()) {
-            Text("Scan now")
+    Column(verticalArrangement = Arrangement.spacedBy(SsSpacing.sm)) {
+        Button(
+            onClick = onScanNow,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = SsColors.NavyPrimary,
+                contentColor = SsColors.TextPrimary,
+            ),
+            shape = SsShapes.md,
+        ) {
+            Text("Scan now", fontWeight = FontWeight.SemiBold)
         }
-        // The assistant is the headline feature: it talks to the whole library.
-        androidx.compose.material3.Button(onClick = onAssistant, modifier = Modifier.fillMaxWidth()) {
-            Text("Ask your screenshots")
+        Button(
+            onClick = onAssistant,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = SsColors.NavyAccent,
+                contentColor = SsColors.TextPrimary,
+            ),
+            shape = SsShapes.md,
+        ) {
+            Text("Ask your screenshots", fontWeight = FontWeight.SemiBold)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            androidx.compose.material3.OutlinedButton(
+        Row(horizontalArrangement = Arrangement.spacedBy(SsSpacing.sm)) {
+            OutlinedButton(
                 onClick = onSearch,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Search") }
-            androidx.compose.material3.OutlinedButton(
+            OutlinedButton(
                 onClick = onBrowse,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("All") }
-            androidx.compose.material3.OutlinedButton(
+            OutlinedButton(
                 onClick = onDuplicates,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Duplicates") }
         }
-        // Second row, not bottom navigation: these are destinations, not tabs,
-        // and the hierarchy stays Home → place → back (§51).
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            androidx.compose.material3.OutlinedButton(
+        Row(horizontalArrangement = Arrangement.spacedBy(SsSpacing.sm)) {
+            OutlinedButton(
                 onClick = onTimeline,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Timeline") }
-            androidx.compose.material3.OutlinedButton(
+            OutlinedButton(
                 onClick = onCollections,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Collections") }
-            androidx.compose.material3.OutlinedButton(
+            OutlinedButton(
                 onClick = onExplore,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Explore") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            androidx.compose.material3.OutlinedButton(
+        Row(horizontalArrangement = Arrangement.spacedBy(SsSpacing.sm)) {
+            OutlinedButton(
                 onClick = onInsights,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Insights") }
-            androidx.compose.material3.OutlinedButton(
+            OutlinedButton(
                 onClick = onCleanup,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Cleanup") }
-            androidx.compose.material3.OutlinedButton(
+            OutlinedButton(
                 onClick = onPrivacy,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Privacy") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            androidx.compose.material3.OutlinedButton(
+        Row(horizontalArrangement = Arrangement.spacedBy(SsSpacing.sm)) {
+            OutlinedButton(
                 onClick = onTasks,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Tasks") }
-            androidx.compose.material3.OutlinedButton(
+            OutlinedButton(
                 onClick = onExpenses,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Expenses") }
-            androidx.compose.material3.OutlinedButton(
+            OutlinedButton(
                 onClick = onActions,
                 modifier = Modifier.weight(1f),
+                shape = SsShapes.md,
             ) { Text("Actions") }
         }
-        androidx.compose.material3.OutlinedButton(
+        OutlinedButton(
             onClick = onAutomation,
             modifier = Modifier.fillMaxWidth(),
+            shape = SsShapes.md,
         ) { Text("Automation") }
     }
 }
@@ -351,9 +414,6 @@ private fun formatCount(value: Int): String =
 
 /**
  * One quiet in-app suggestion (§35): "You have N screenshots about X."
- *
- * Shown only when an entity covers enough screenshots to be worth opening,
- * and never as a notification. Tapping opens the entity page.
  */
 @Composable
 private fun SuggestionCard(
@@ -364,12 +424,13 @@ private fun SuggestionCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            containerColor = SsColors.NavyPrimary,
+            contentColor = SsColors.TextOnNavy,
         ),
+        shape = SsShapes.md,
         onClick = onClick,
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(SsSpacing.md)) {
             Text(
                 text = "You have $count screenshots about $label.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -377,7 +438,7 @@ private fun SuggestionCard(
             Text(
                 text = "View collection →",
                 style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = SsSpacing.xs),
             )
         }
     }
@@ -385,11 +446,6 @@ private fun SuggestionCard(
 
 /**
  * One smart collection (§24).
- *
- * Shows the cover (newest member), the honest label, and the member count.
- * Tapping opens the cover; the full group is a search away, so the card stays
- * small. Groups with fewer than three members are never built, so every card
- * here earned its place.
  */
 @Composable
 private fun SmartGroupCard(
@@ -402,13 +458,14 @@ private fun SmartGroupCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = SsColors.Surface,
         ),
+        shape = SsShapes.md,
         onClick = { onOpenScreenshot(group.coverId) },
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(SsSpacing.md),
+            horizontalArrangement = Arrangement.spacedBy(SsSpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             cover?.let {
@@ -425,12 +482,13 @@ private fun SmartGroupCard(
                 Text(
                     text = group.label,
                     style = MaterialTheme.typography.titleSmall,
+                    color = SsColors.TextPrimary,
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
                     text = "${group.size} screenshots",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
         }
@@ -445,18 +503,20 @@ private fun InsightRow(insight: HomeViewModel.Insight) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = SsColors.Surface,
         ),
+        shape = SsShapes.md,
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column(Modifier.padding(SsSpacing.md)) {
             Text(
                 text = insight.title,
                 style = MaterialTheme.typography.titleSmall,
+                color = SsColors.TextPrimary,
             )
             Text(
                 text = insight.detail,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
         }
     }

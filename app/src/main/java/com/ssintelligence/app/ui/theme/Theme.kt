@@ -18,59 +18,96 @@ import androidx.core.view.WindowCompat
 import com.ssintelligence.app.domain.model.ThemeMode
 
 /*
- * Material 3 tokens only — no hardcoded colors in screens (§38).
- * The seed is a deep navy that reads as "private / local" without alarming.
+ * AMOLED-first design system (§2, §3, §26).
+ *
+ * True black backgrounds, deep navy surfaces, subtle blue accents.
+ * Blue is reserved for interactive elements, active states, and progress.
+ * The majority of the interface remains black and dark navy.
  */
-private val Seed = Color(0xFF3D5AFE)
 
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF2A3EA8),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDDE1FF),
-    onPrimaryContainer = Color(0xFF00105C),
-    secondary = Color(0xFF5A5D72),
-    secondaryContainer = Color(0xFFDFE1F9),
-    onSecondaryContainer = Color(0xFF171A2C),
-    tertiary = Color(0xFF00696E),
-    tertiaryContainer = Color(0xFF6FF6FC),
-    onTertiaryContainer = Color(0xFF002022),
-    error = Color(0xFFBA1A1A),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFFBF8FF),
-    onBackground = Color(0xFF1A1B21),
-    surface = Color(0xFFFBF8FF),
-    onSurface = Color(0xFF1A1B21),
-    surfaceVariant = Color(0xFFE2E1EC),
-    onSurfaceVariant = Color(0xFF45464F),
-    outline = Color(0xFF757680),
-    outlineVariant = Color(0xFFC6C6D0),
+// Core palette
+object SsColors {
+    // Backgrounds
+    val Background = Color(0xFF000000)           // True AMOLED black
+    val BackgroundSecondary = Color(0xFF050912)  // Extremely dark navy
+    val Surface = Color(0xFF08111F)              // Dark navy surface
+    val SurfaceElevated = Color(0xFF0B1628)      // Elevated surface
+    val SurfaceVariant = Color(0xFF0E1A2E)       // Slightly lighter navy
+
+    // Navy blues
+    val NavyPrimary = Color(0xFF0A3D91)          // Primary navy
+    val NavyAccent = Color(0xFF1456C0)           // Accent navy/blue
+    val NavyBright = Color(0xFF1E6FDB)           // Bright accent for interactive
+
+    // Text
+    val TextPrimary = Color(0xFFF1F5F9)          // Near-white
+    val TextSecondary = Color(0xFF94A3B8)        // Cool gray
+    val TextDisabled = Color(0xFF475569)         // Muted gray-blue
+    val TextOnNavy = Color(0xFFE2E8F0)           // Text on navy backgrounds
+
+    // Lines and borders
+    val Divider = Color(0xFF1E293B)              // Subtle dark navy-gray
+    val Outline = Color(0xFF334155)              // Slightly more visible border
+
+    // Semantic
+    val Error = Color(0xFFEF4444)
+    val ErrorContainer = Color(0xFF7F1D1D)
+    val Success = Color(0xFF22C55E)
+    val Warning = Color(0xFFF59E0B)
+}
+
+private val AmoledDarkColors = darkColorScheme(
+    primary = Color(0xFF60A5FA),
+    onPrimary = Color(0xFF003064),
+    primaryContainer = Color(0xFF0A3D91),
+    onPrimaryContainer = Color(0xFFD6E4FF),
+    secondary = Color(0xFF94A3B8),
+    onSecondary = Color(0xFF1E293B),
+    secondaryContainer = Color(0xFF1E293B),
+    onSecondaryContainer = Color(0xFFCBD5E1),
+    tertiary = Color(0xFF22D3EE),
+    onTertiary = Color(0xFF00363D),
+    tertiaryContainer = Color(0xFF0B3D44),
+    onTertiaryContainer = Color(0xFFB8EDF5),
+    error = Color(0xFFEF4444),
+    onError = Color(0xFF450A0A),
+    errorContainer = Color(0xFF7F1D1D),
+    onErrorContainer = Color(0xFFFEE2E2),
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFF1F5F9),
+    surface = Color(0xFF050912),
+    onSurface = Color(0xFFF1F5F9),
+    surfaceVariant = Color(0xFF0B1628),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    outline = Color(0xFF334155),
+    outlineVariant = Color(0xFF1E293B),
 )
 
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFFBAC3FF),
-    onPrimary = Color(0xFF00218B),
-    primaryContainer = Color(0xFF0031C4),
-    onPrimaryContainer = Color(0xFFDEE0FF),
-    secondary = Color(0xFFC3C5DD),
-    secondaryContainer = Color(0xFF424659),
-    onSecondaryContainer = Color(0xFFDFE1F9),
-    tertiary = Color(0xFF4CD9E0),
-    tertiaryContainer = Color(0xFF004F53),
-    onTertiaryContainer = Color(0xFF6FF6FC),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF121318),
-    onBackground = Color(0xFFE3E1E9),
-    surface = Color(0xFF121318),
-    onSurface = Color(0xFFE3E1E9),
-    surfaceVariant = Color(0xFF45464F),
-    onSurfaceVariant = Color(0xFFC6C6D0),
-    outline = Color(0xFF90909A),
-    outlineVariant = Color(0xFF45464F),
+private val LightColors = lightColorScheme(
+    primary = Color(0xFF0A3D91),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFD6E4FF),
+    onPrimaryContainer = Color(0xFF001A41),
+    secondary = Color(0xFF475569),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFE2E8F0),
+    onSecondaryContainer = Color(0xFF1E293B),
+    tertiary = Color(0xFF0E7490),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFB8EDF5),
+    onTertiaryContainer = Color(0xFF042F36),
+    error = Color(0xFFB91C1C),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFEE2E2),
+    onErrorContainer = Color(0xFF7F1D1D),
+    background = Color(0xFFF8FAFC),
+    onBackground = Color(0xFF0F172A),
+    surface = Color(0xFFF8FAFC),
+    onSurface = Color(0xFF0F172A),
+    surfaceVariant = Color(0xFFE2E8F0),
+    onSurfaceVariant = Color(0xFF475569),
+    outline = Color(0xFF94A3B8),
+    outlineVariant = Color(0xFFCBD5E1),
 )
 
 @Composable
@@ -91,7 +128,7 @@ fun SsIntelligenceTheme(
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
 
-        darkTheme -> DarkColors
+        darkTheme -> AmoledDarkColors
         else -> LightColors
     }
 
@@ -100,6 +137,7 @@ fun SsIntelligenceTheme(
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
             window.statusBarColor = Color.Transparent.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
