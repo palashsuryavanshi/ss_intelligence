@@ -1,11 +1,15 @@
 package com.ssintelligence.app.ui.onboarding
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -13,10 +17,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ssintelligence.app.R
 import com.ssintelligence.app.domain.usecase.ObserveOnboardingUseCase
 import com.ssintelligence.app.ui.theme.SsColors
 
@@ -32,11 +39,20 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp, vertical = 48.dp),
+            .padding(horizontal = 28.dp)
+            .padding(top = 64.dp, bottom = 48.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Image(
+            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+            contentDescription = "SS Intelligence app icon",
+            modifier = Modifier
+                .size(96.dp)
+                .clip(RoundedCornerShape(24.dp)),
+        )
         Text(
             text = "Screenshot Intelligence",
             style = MaterialTheme.typography.headlineMedium,
