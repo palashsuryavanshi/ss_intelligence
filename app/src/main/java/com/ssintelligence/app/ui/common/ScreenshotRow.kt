@@ -1,5 +1,8 @@
 package com.ssintelligence.app.ui.common
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +33,7 @@ import com.ssintelligence.app.ui.theme.SsColors
  * Derived strings are computed once per screenshot id, not on every
  * recomposition, so fast scrolling never re-parses OCR text.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun ScreenshotRow(
     screenshot: Screenshot,
@@ -39,6 +42,9 @@ fun ScreenshotRow(
     /** Selection state for the browse screen's "ask about these" mode (§15). */
     selected: Boolean = false,
     onLongClick: ((Long) -> Unit)? = null,
+    /** When provided, the thumbnail animates into the detail hero image. */
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     // Computed once per item: scrolling reuses compositions without redoing
     // string work.
@@ -85,6 +91,8 @@ fun ScreenshotRow(
                 preview = preview,
                 dateAdded = dateAdded,
                 statusLabel = statusLabel,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
             )
         }
     } else {
@@ -106,6 +114,8 @@ fun ScreenshotRow(
                 preview = preview,
                 dateAdded = dateAdded,
                 statusLabel = statusLabel,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
             )
         }
     }
@@ -117,6 +127,8 @@ private fun ScreenshotRowContent(
     preview: String?,
     dateAdded: String,
     statusLabel: String,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     Row(
         modifier = Modifier
@@ -128,6 +140,8 @@ private fun ScreenshotRowContent(
             screenshot = screenshot,
             modifier = thumbnailModifier(),
             contentDescription = null, // described by the row instead
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
         )
         Column(
             modifier = Modifier.weight(1f),

@@ -1,5 +1,8 @@
 package com.ssintelligence.app.ui.timeline
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,12 +53,14 @@ import com.ssintelligence.app.ui.theme.SsColors
  * days is one trip) and sequences (adjacent overlapping shots are one flow).
  * Dates are never fabricated — a day appears only when screenshots exist on it.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun TimelineScreen(
     locator: ServiceLocator,
     onBack: () -> Unit,
     onOpenScreenshot: (Long) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     viewModel: TimelineViewModel = viewModel(factory = TimelineViewModel.Factory(locator)),
 ) {
     val days by viewModel.days.collectAsStateWithLifecycle()
@@ -131,7 +136,16 @@ fun TimelineScreen(
                     }
                 }
                 items(day.screenshots, key = { it.id }, contentType = { "screenshot" }) { screenshot ->
-                    ScreenshotRow(screenshot = screenshot, onClick = { onOpenScreenshot(screenshot.id) })
+                    ScreenshotRow(
+                        screenshot = screenshot,
+                        onClick = { onOpenScreenshot(screenshot.id) },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = null,
+                            fadeOutSpec = null,
+                        ),
+                    )
                 }
             }
         }

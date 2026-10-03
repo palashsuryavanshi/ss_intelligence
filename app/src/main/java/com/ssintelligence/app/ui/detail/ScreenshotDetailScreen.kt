@@ -3,6 +3,11 @@ package com.ssintelligence.app.ui.detail
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,6 +69,7 @@ import com.ssintelligence.app.ui.common.StatusChip
 import com.ssintelligence.app.ui.common.errorMessage
 import com.ssintelligence.app.ui.theme.OcrTextStyle
 import com.ssintelligence.app.ui.theme.SsColors
+import com.ssintelligence.app.ui.theme.SsMotion
 
 /**
  * Screenshot detail (§24): the image, the OCR text, and the structured
@@ -72,12 +78,14 @@ import com.ssintelligence.app.ui.theme.SsColors
  * OTP values are masked until explicitly revealed (§17) and no extracted
  * value is ever placed in a share intent or notification (§40).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun ScreenshotDetailScreen(
     locator: ServiceLocator,
     screenshotId: Long,
     onBack: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     onOpenScreenshot: (Long) -> Unit = {},
     onCompare: (Long) -> Unit = {},
     onExploreEntity: (Long) -> Unit = {},
@@ -185,6 +193,9 @@ fun ScreenshotDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 520.dp),
+                    screenshotId = current.screenshot.id,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope,
                 )
             }
 
@@ -330,7 +341,13 @@ fun ScreenshotDetailScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
+                                .padding(12.dp)
+                                .animateContentSize(
+                                    animationSpec = tween(
+                                        SsMotion.Standard,
+                                        easing = SsMotion.EaseInOut,
+                                    ),
+                                ),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             // Markdown-rendered and selectable: long-press to

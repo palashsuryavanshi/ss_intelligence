@@ -1,5 +1,10 @@
 package com.ssintelligence.app.ui.common
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,18 +56,34 @@ import com.ssintelligence.app.ui.theme.SsColors
  * Only a downscaled decode is requested, so a list of full-resolution
  * screenshots never inflates memory (§31). Coil owns the disk/memory cache,
  * which satisfies the "thumbnails must be cached" requirement.
+ *
+ * When shared-transition scopes are provided, the thumbnail participates in
+ * the list → detail hero animation; otherwise it renders exactly as before.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ScreenshotThumbnail(
     screenshot: Screenshot,
     modifier: Modifier = Modifier,
     contentDescription: String? = "Screenshot: ${screenshot.filename}",
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val context = LocalContext.current
+    var boxModifier = modifier
+        .clip(RoundedCornerShape(12.dp))
+        .background(SsColors.SurfaceVariant)
+    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            val state = rememberSharedContentState(key = "screenshot-${screenshot.id}")
+            boxModifier = boxModifier.sharedElement(
+                sharedContentState = state,
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    }
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(SsColors.SurfaceVariant),
+        modifier = boxModifier,
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
@@ -79,17 +100,31 @@ fun ScreenshotThumbnail(
 }
 
 /** Full-size preview for the detail screen (§24). */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ScreenshotImage(
     uri: String,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    screenshotId: Long? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
 ) {
     val context = LocalContext.current
+    var boxModifier = modifier
+        .clip(RoundedCornerShape(16.dp))
+        .background(SsColors.SurfaceVariant)
+    if (sharedTransitionScope != null && animatedVisibilityScope != null && screenshotId != null) {
+        with(sharedTransitionScope) {
+            val state = rememberSharedContentState(key = "screenshot-$screenshotId")
+            boxModifier = boxModifier.sharedElement(
+                sharedContentState = state,
+                animatedVisibilityScope = animatedVisibilityScope,
+            )
+        }
+    }
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(SsColors.SurfaceVariant),
+        modifier = boxModifier,
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
@@ -170,6 +205,15 @@ fun IndexingProgressCard(
     modifier: Modifier = Modifier,
 ) {
     val fraction = if (total > 0) processed.toFloat() / total else 0f
+    // Smooth the bar toward each new value instead of jumping between them.
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = tween(
+            durationMillis = com.ssintelligence.app.ui.theme.SsMotion.Standard,
+            easing = com.ssintelligence.app.ui.theme.SsMotion.EaseOut,
+        ),
+        label = "indexing-progress",
+    )
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = SsColors.NavyPrimary,
@@ -184,7 +228,7 @@ fun IndexingProgressCard(
                 modifier = Modifier.padding(top = 2.dp),
             )
             LinearProgressIndicator(
-                progress = { fraction },
+                progress = { animatedFraction },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp)

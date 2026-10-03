@@ -1,5 +1,8 @@
 package com.ssintelligence.app.ui.screenshots
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -48,13 +53,15 @@ import com.ssintelligence.app.ui.common.ScreenshotRow
  * "Ask about these", which hands the ids to the assistant (§15). Selection is
  * transient UI state — it never writes to the index.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun ScreenshotListScreen(
     locator: ServiceLocator,
     onOpenScreenshot: (Long) -> Unit,
     onAskSelection: (List<Long>) -> Unit = {},
     onCompareSelection: (List<Long>) -> Unit = {},
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     viewModel: ScreenshotListViewModel = viewModel(factory = ScreenshotListViewModel.Factory(locator)),
 ) {
     val screenshots by viewModel.screenshots.collectAsStateWithLifecycle()
@@ -64,6 +71,8 @@ fun ScreenshotListScreen(
     var collectName by remember { mutableStateOf("") }
     val selectionMode = selection.isNotEmpty()
     val scope = rememberCoroutineScope()
+    // The bar collapses continuously with scroll position — no layout jumps.
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     Scaffold(
         topBar = {
@@ -106,13 +115,15 @@ fun ScreenshotListScreen(
                         }
                     }
                 },
+                scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -142,6 +153,12 @@ fun ScreenshotListScreen(
                     val selected = screenshot.id in selection
                     ScreenshotRow(
                         screenshot = screenshot,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = null,
+                            fadeOutSpec = null,
+                        ),
                         onClick = { id ->
                             if (selectionMode) {
                                 selection = if (selected) selection - id else selection + id

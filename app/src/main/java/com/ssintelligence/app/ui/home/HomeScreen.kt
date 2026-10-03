@@ -1,6 +1,9 @@
 package com.ssintelligence.app.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -70,7 +73,7 @@ import com.ssintelligence.app.ui.common.SsShapes
  * AMOLED + Navy design: true black background, deep navy surfaces,
  * subtle blue accents for interactive elements.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
     locator: ServiceLocator,
@@ -91,6 +94,8 @@ fun HomeScreen(
     onNavigateToActions: () -> Unit = {},
     onNavigateToAutomation: () -> Unit = {},
     onOpenScreenshot: (Long) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(locator)),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -263,6 +268,12 @@ fun HomeScreen(
                     ScreenshotRow(
                         screenshot = screenshot,
                         onClick = onOpenScreenshot,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = null,
+                            fadeOutSpec = null,
+                        ),
                     )
                 }
             }

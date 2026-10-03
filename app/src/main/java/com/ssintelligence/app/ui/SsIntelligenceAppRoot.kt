@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -55,7 +57,9 @@ import com.ssintelligence.app.ui.search.SearchScreen
 import com.ssintelligence.app.ui.similar.SimilarScreen
 import com.ssintelligence.app.ui.timeline.TimelineScreen
 import com.ssintelligence.app.ui.settings.SettingsScreen
+import com.ssintelligence.app.ui.theme.SsAnimations
 import com.ssintelligence.app.ui.theme.SsIntelligenceTheme
+import com.ssintelligence.app.ui.theme.SsMotion
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -160,11 +164,19 @@ fun SsIntelligenceAppRoot(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MainNavigation(locator: ServiceLocator, startDestination: String? = null) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // Transitions respect the system reduced-motion setting: when enabled,
+    // navigation is instant rather than animated (§27).
+    val reducedMotion = remember {
+        SsAnimations.isReducedMotionEnabled(context)
+    }
+    val screenEnter = if (reducedMotion) 0 else SsMotion.ScreenEnter
+    val screenExit = if (reducedMotion) 0 else SsMotion.ScreenExit
 
     // Android 13+ uses READ_MEDIA_IMAGES; 10-12 use READ_EXTERNAL_STORAGE.
     val permission = remember {
@@ -205,38 +217,42 @@ private fun MainNavigation(locator: ServiceLocator, startDestination: String? = 
         return
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = startDestination ?: Routes.HOME,
-        modifier = Modifier.fillMaxSize(),
-        enterTransition = {
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(200),
-            ) + fadeIn(animationSpec = tween(200))
-        },
-        exitTransition = {
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(200),
-            ) + fadeOut(animationSpec = tween(200))
-        },
-        popEnterTransition = {
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(200),
-            ) + fadeIn(animationSpec = tween(200))
-        },
-        popExitTransition = {
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(200),
-            ) + fadeOut(animationSpec = tween(200))
-        },
-    ) {
+    SharedTransitionLayout {
+        val sharedTransitionScope = this
+        NavHost(
+            navController = navController,
+            startDestination = startDestination ?: Routes.HOME,
+            modifier = Modifier.fillMaxSize(),
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(screenEnter, easing = SsMotion.EaseOut),
+                ) + fadeIn(animationSpec = tween(screenEnter))
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(screenExit, easing = SsMotion.EaseIn),
+                ) + fadeOut(animationSpec = tween(screenExit))
+            },
+            popEnterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = tween(screenEnter, easing = SsMotion.EaseOut),
+                ) + fadeIn(animationSpec = tween(screenEnter))
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = tween(screenExit, easing = SsMotion.EaseIn),
+                ) + fadeOut(animationSpec = tween(screenExit))
+            },
+        ) {
         composable(Routes.HOME) {
             HomeScreen(
                 locator = locator,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = this,
                 onNavigateToSearch = { navController.navigate(Routes.SEARCH) },
                 onNavigateToBrowse = { navController.navigate(Routes.BROWSE) },
                 onNavigateToDuplicates = { navController.navigate(Routes.DUPLICATES) },
@@ -309,6 +325,8 @@ private fun MainNavigation(locator: ServiceLocator, startDestination: String? = 
         composable(Routes.BROWSE) {
             ScreenshotListScreen(
                 locator = locator,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = this,
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
                 onAskSelection = { ids -> navController.navigate(Routes.assistant(selection = ids)) },
                 onCompareSelection = { ids ->
@@ -416,6 +434,8 @@ private fun MainNavigation(locator: ServiceLocator, startDestination: String? = 
             ScreenshotDetailScreen(
                 locator = locator,
                 screenshotId = id,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = this,
                 onBack = { navController.popBackStack() },
                 // "Find similar" navigates within the same detail destination,
                 // so back returns to the previous screenshot, not to search.
@@ -432,6 +452,8 @@ private fun MainNavigation(locator: ServiceLocator, startDestination: String? = 
         composable(Routes.TIMELINE) {
             TimelineScreen(
                 locator = locator,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = this,
                 onBack = { navController.popBackStack() },
                 onOpenScreenshot = { id -> navController.navigate(Routes.detail(id)) },
             )
@@ -501,6 +523,7 @@ private fun MainNavigation(locator: ServiceLocator, startDestination: String? = 
                     onBack = { navController.popBackStack() },
                 )
             }
+        }
         }
     }
 }
