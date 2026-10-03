@@ -25,7 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -126,7 +126,7 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(onClick = onNavigateToSearch) {
-                        Icon(Icons.Filled.ContentCopy, contentDescription = "Search screenshots")
+                        Icon(Icons.Filled.Search, contentDescription = "Search screenshots")
                     }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Open settings")
