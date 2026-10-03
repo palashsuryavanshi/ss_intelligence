@@ -33,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ssintelligence.app.ServiceLocator
 import com.ssintelligence.app.search.SearchResponse
 import com.ssintelligence.app.ui.common.DateFormats
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Search inspector — **debug builds only** (§46).
@@ -162,13 +163,13 @@ private fun Summary(response: SearchResponse) {
             Text(
                 text = DateFormats.formatDateTime(result.screenshot.dateAdded),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
             if (result.matches.isEmpty()) {
                 Text(
                     text = "no explicit match reason",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -191,7 +192,7 @@ private fun Summary(response: SearchResponse) {
                 Text(
                     text = snippet.text,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -202,7 +203,7 @@ private fun Summary(response: SearchResponse) {
         Text(
             text = "… and ${response.results.size - MAX_ROWS} more",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
     }
 }
@@ -216,7 +217,7 @@ private fun Labelled(label: String, content: @Composable () -> Unit) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
             modifier = Modifier.padding(top = 2.dp),
         )
         Column(modifier = Modifier.weight(1f)) { content() }

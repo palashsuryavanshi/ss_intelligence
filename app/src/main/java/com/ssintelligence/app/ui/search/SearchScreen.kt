@@ -60,6 +60,7 @@ import com.ssintelligence.app.search.SearchQuery
 import com.ssintelligence.app.search.SortMode
 import com.ssintelligence.app.ui.common.EmptyState
 import com.ssintelligence.app.ui.common.IndexingProgressCard
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * The search experience (§25, §26, §28, §29, §30, §31).
@@ -380,7 +381,7 @@ private fun ResultCountLine(state: SearchUiState.Results) {
         Text(
             text = "${state.results.size} result${if (state.results.size == 1) "" else "s"}",
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
         Text(
             text = when {
@@ -389,7 +390,7 @@ private fun ResultCountLine(state: SearchUiState.Results) {
                 else -> "Text matches"
             },
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
     }
 }
@@ -422,7 +423,7 @@ private fun NoResultsContent(
             Text(
                 text = "No screenshots matched. Try fewer words, or clear the filters.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
         } else {
@@ -548,7 +549,7 @@ private fun PinnedImageRow(
         Text(
             text = "Finding shots that look like this",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
             modifier = Modifier.weight(1f),
         )
         IconButton(onClick = onClear) {

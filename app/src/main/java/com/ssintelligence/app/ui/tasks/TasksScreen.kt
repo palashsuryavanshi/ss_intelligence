@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Local tasks view (§48): reminders, suggested actions and review items.
@@ -96,7 +97,7 @@ fun TasksScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            containerColor = SsColors.SurfaceElevated,
                         ),
                         onClick = {
                             task.screenshotIds.firstOrNull()?.let(onOpenScreenshot)
@@ -108,13 +109,13 @@ fun TasksScreen(
                                 Text(
                                     text = task.detail,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = SsColors.TextSecondary,
                                 )
                             }
                             Text(
                                 text = task.source,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = SsColors.TextSecondary,
                             )
                         }
                     }

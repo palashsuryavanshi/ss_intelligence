@@ -28,6 +28,7 @@ import com.ssintelligence.app.domain.model.DuplicateGroup
 import com.ssintelligence.app.ui.common.EmptyState
 import com.ssintelligence.app.ui.common.ScreenshotRow
 import java.util.Locale
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Duplicate groups (§18, §22, §29 Phase 4).
@@ -75,7 +76,7 @@ fun DuplicatesScreen(
                     Text(
                         text = "Exact duplicates",
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = SsColors.NavyAccent,
                         modifier = Modifier.semantics { heading() },
                     )
                 }
@@ -84,7 +85,7 @@ fun DuplicatesScreen(
                         text = "Identical image content, detected by SHA-256. Only the earliest " +
                             "copy in each set was read again.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = SsColors.TextSecondary,
                     )
                 }
                 items(groups, key = { it.contentHash }) { group ->
@@ -96,7 +97,7 @@ fun DuplicatesScreen(
                     Text(
                         text = "Similar screenshots",
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = SsColors.NavyAccent,
                         modifier = Modifier.semantics { heading() },
                     )
                 }
@@ -105,7 +106,7 @@ fun DuplicatesScreen(
                         text = "Same layout with small differences — a changed price, a new " +
                             "badge. Similar, not duplicates.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = SsColors.TextSecondary,
                     )
                 }
                 items(nearGroups, key = { "near-${it.coverId}" }) { group ->
@@ -127,7 +128,7 @@ private fun DuplicateGroupCard(
 ) {    Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = SsColors.Surface,
         ),
     ) {
         Column(Modifier.padding(12.dp)) {
@@ -139,7 +140,7 @@ private fun DuplicateGroupCard(
             Text(
                 text = "content hash ${group.contentHash.take(12)}…",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             group.screenshots.forEach { screenshot ->
@@ -163,7 +164,7 @@ private fun NearGroupCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = SsColors.Surface,
         ),
     ) {
         Column(Modifier.padding(12.dp)) {

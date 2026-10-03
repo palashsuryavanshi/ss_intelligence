@@ -38,6 +38,7 @@ import com.ssintelligence.app.search.Snippet
 import com.ssintelligence.app.ui.common.DateFormats
 import com.ssintelligence.app.ui.common.ScreenshotThumbnail
 import com.ssintelligence.app.ui.common.thumbnailModifier
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * One search result (§26, §27).
@@ -59,7 +60,7 @@ fun SearchResultCard(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = SsColors.SurfaceVariant,
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -104,7 +105,7 @@ fun SearchResultCard(
                 Text(
                     text = DateFormats.formatDate(result.screenshot.dateAdded),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
         }
@@ -131,8 +132,8 @@ private fun MatchReasons(matches: List<MatchReason>) {
     ) {
         matches.take(MAX_VISIBLE_MATCHES).forEach { reason ->
             Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                color = SsColors.SurfaceVariant,
+                contentColor = SsColors.TextSecondary,
                 shape = RoundedCornerShape(6.dp),
             ) {
                 Text(
@@ -159,7 +160,7 @@ private fun CollapsedNote(count: Int) {
     Text(
         text = "$count identical screenshots",
         style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = SsColors.TextSecondary,
     )
 }
 
@@ -176,8 +177,8 @@ fun ParsedQueryBanner(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = SsColors.NavyPrimary,
+        contentColor = SsColors.TextOnNavy,
         shape = RoundedCornerShape(12.dp),
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -201,8 +202,8 @@ fun ParsedQueryBanner(
 fun RelaxationBanner(message: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        color = SsColors.SurfaceVariant,
+        contentColor = SsColors.TextSecondary,
         shape = RoundedCornerShape(12.dp),
     ) {
         Text(
@@ -219,7 +220,7 @@ fun SearchSectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
+        color = SsColors.NavyAccent,
         modifier = modifier
             .padding(top = 8.dp, bottom = 4.dp)
             .semantics { heading() },
@@ -255,14 +256,14 @@ fun InfoChip(
     Surface(
         modifier = modifier,
         color = if (emphasised) {
-            MaterialTheme.colorScheme.primaryContainer
+            SsColors.NavyPrimary
         } else {
-            MaterialTheme.colorScheme.surfaceVariant
+            SsColors.SurfaceVariant
         },
         contentColor = if (emphasised) {
-            MaterialTheme.colorScheme.onPrimaryContainer
+            SsColors.TextOnNavy
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+            SsColors.TextSecondary
         },
         shape = RoundedCornerShape(8.dp),
     ) {
@@ -278,14 +279,14 @@ fun InfoChip(
 @Composable
 internal fun MatchKindDot(kind: MatchKind, modifier: Modifier = Modifier) {
     val color = when (kind) {
-        MatchKind.PHRASE -> MaterialTheme.colorScheme.primary
-        MatchKind.PRICE -> MaterialTheme.colorScheme.tertiary
-        MatchKind.URL, MatchKind.PHONE -> MaterialTheme.colorScheme.secondary
-        MatchKind.OTP -> MaterialTheme.colorScheme.error
-        MatchKind.SEMANTIC -> MaterialTheme.colorScheme.tertiary
-        MatchKind.VISUAL, MatchKind.ENTITY -> MaterialTheme.colorScheme.secondary
-        MatchKind.DATE, MatchKind.FILENAME, MatchKind.DUPLICATE -> MaterialTheme.colorScheme.outline
-        MatchKind.TERM -> MaterialTheme.colorScheme.outlineVariant
+        MatchKind.PHRASE -> SsColors.NavyAccent
+        MatchKind.PRICE -> SsColors.NavyBright
+        MatchKind.URL, MatchKind.PHONE -> SsColors.TextSecondary
+        MatchKind.OTP -> SsColors.Error
+        MatchKind.SEMANTIC -> SsColors.NavyBright
+        MatchKind.VISUAL, MatchKind.ENTITY -> SsColors.TextSecondary
+        MatchKind.DATE, MatchKind.FILENAME, MatchKind.DUPLICATE -> SsColors.Outline
+        MatchKind.TERM -> SsColors.Divider
     }
     Box(
         modifier = modifier

@@ -49,6 +49,7 @@ import com.ssintelligence.app.assistant.AssistantResponse
 import com.ssintelligence.app.ui.common.ScreenshotThumbnail
 import com.ssintelligence.app.ui.common.DateFormats
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Executes a confirmed assistant action proposal (§77).
@@ -196,7 +197,7 @@ fun AssistantScreen(
                             Text(
                                 text = "Everything is answered from your own indexed screenshots, on this device.",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = SsColors.TextSecondary,
                             )
                         }
                     }
@@ -237,7 +238,7 @@ fun AssistantScreen(
                 Text(
                     text = "Searching your screenshots…",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
@@ -245,7 +246,7 @@ fun AssistantScreen(
                 Text(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = SsColors.Error,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
@@ -297,7 +298,7 @@ private fun AnswerCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = SsColors.SurfaceElevated,
         ),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -308,7 +309,7 @@ private fun AnswerCard(
             Text(
                 text = response.confidenceType.label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
             if (response.sources.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -316,7 +317,7 @@ private fun AnswerCard(
                         Surface(
                             onClick = { onOpenScreenshot(source.screenshotId) },
                             shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            color = SsColors.SurfaceVariant,
                         ) {
                             Column(
                                 Modifier.padding(8.dp),
@@ -330,7 +331,7 @@ private fun AnswerCard(
                                 Text(
                                     text = DateFormats.formatDate(source.dateAdded),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = SsColors.TextSecondary,
                                 )
                             }
                         }
@@ -348,7 +349,7 @@ private fun AnswerCard(
                 Text(
                     text = "Sensitive content is masked. Reveal it from the screenshot.",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = SsColors.Error,
                 )
             }
             // Phase 7 action cards (§76): the assistant proposes, the user

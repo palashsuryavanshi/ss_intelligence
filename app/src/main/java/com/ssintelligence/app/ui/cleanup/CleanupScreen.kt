@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Cleanup center (§21): reviewable suggestions, never automatic deletion.
@@ -93,14 +94,14 @@ fun CleanupScreen(
                     text = "These are suggestions only. Nothing is deleted or changed " +
                         "without your explicit action.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
             items(suggestions, key = { it.id }) { suggestion ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        containerColor = SsColors.SurfaceElevated,
                     ),
                 ) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -108,7 +109,7 @@ fun CleanupScreen(
                         Text(
                             text = suggestion.reason,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                         )
                         androidx.compose.foundation.layout.Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),

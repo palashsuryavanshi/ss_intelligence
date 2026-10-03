@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ssintelligence.app.ui.theme.SsColors
 /**
  * Explains why image access is needed before the system dialog appears (§7).
  * Denying is handled gracefully: the app stays usable and can ask again.
@@ -40,7 +41,7 @@ fun PermissionRationale(
         Icon(
             imageVector = Icons.Filled.PhotoLibrary,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = SsColors.NavyAccent,
             modifier = Modifier.size(56.dp),
         )
         Text(
@@ -59,7 +60,7 @@ fun PermissionRationale(
                 "requests no other permissions.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
         Button(
             onClick = onRequest,

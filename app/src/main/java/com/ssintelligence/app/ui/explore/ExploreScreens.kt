@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Entity explorer (§52) and entity pages (§17, §53).
@@ -97,7 +98,7 @@ fun ExploreScreen(
                     Text(
                         text = group.type.label,
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = SsColors.NavyAccent,
                         modifier = Modifier.semantics { heading() },
                     )
                 }

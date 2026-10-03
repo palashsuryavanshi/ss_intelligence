@@ -43,6 +43,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.ssintelligence.app.domain.model.ProcessingStatus
 import com.ssintelligence.app.domain.model.Screenshot
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Thumbnail for a screenshot row (§23).
@@ -61,7 +62,7 @@ fun ScreenshotThumbnail(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(SsColors.SurfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
@@ -87,7 +88,7 @@ fun ScreenshotImage(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(SsColors.SurfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
@@ -108,26 +109,26 @@ fun StatusChip(status: ProcessingStatus, modifier: Modifier = Modifier) {
     val (label, container, content) = when (status) {
         ProcessingStatus.COMPLETED -> Triple(
             "Indexed",
-            MaterialTheme.colorScheme.tertiaryContainer,
-            MaterialTheme.colorScheme.onTertiaryContainer,
+            SsColors.SurfaceVariant,
+            SsColors.TextSecondary,
         )
 
         ProcessingStatus.PENDING -> Triple(
             "Queued",
-            MaterialTheme.colorScheme.secondaryContainer,
-            MaterialTheme.colorScheme.onSecondaryContainer,
+            SsColors.SurfaceVariant,
+            SsColors.TextSecondary,
         )
 
         ProcessingStatus.PROCESSING -> Triple(
             "Reading text",
-            MaterialTheme.colorScheme.primaryContainer,
-            MaterialTheme.colorScheme.onPrimaryContainer,
+            SsColors.NavyPrimary,
+            SsColors.TextOnNavy,
         )
 
         ProcessingStatus.FAILED -> Triple(
             "Not indexed",
-            MaterialTheme.colorScheme.errorContainer,
-            MaterialTheme.colorScheme.onErrorContainer,
+            SsColors.ErrorContainer,
+            SsColors.TextPrimary,
         )
     }
     Surface(
@@ -168,8 +169,8 @@ fun IndexingProgressCard(
     val fraction = if (total > 0) processed.toFloat() / total else 0f
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = SsColors.NavyPrimary,
+        contentColor = SsColors.TextOnNavy,
         shape = RoundedCornerShape(16.dp),
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -231,7 +232,7 @@ fun EmptyState(
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
             textAlign = TextAlign.Center,
         )
         if (action != null) {
@@ -249,8 +250,8 @@ fun ErrorBanner(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        color = SsColors.ErrorContainer,
+        contentColor = SsColors.TextPrimary,
         shape = RoundedCornerShape(12.dp),
     ) {
         Row(
@@ -282,7 +283,7 @@ fun OtpRevealRow(
     var revealed by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = SsColors.SurfaceVariant,
         shape = RoundedCornerShape(12.dp),
     ) {
         Row(
@@ -313,7 +314,7 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
+        color = SsColors.NavyAccent,
         modifier = modifier.padding(top = 8.dp, bottom = 4.dp),
     )
 }
@@ -330,7 +331,7 @@ fun MetadataRow(label: String, value: String, modifier: Modifier = Modifier) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
         Text(
             text = value,

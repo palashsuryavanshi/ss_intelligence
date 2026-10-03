@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Insights center (§51): every automatically derived observation, reviewable.
@@ -89,7 +90,7 @@ fun InsightsScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        containerColor = SsColors.SurfaceElevated,
                     ),
                 ) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -97,7 +98,7 @@ fun InsightsScreen(
                         Text(
                             text = insight.detail,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                         )
                     }
                 }

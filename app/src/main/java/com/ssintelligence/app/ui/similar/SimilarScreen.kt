@@ -34,6 +34,7 @@ import com.ssintelligence.app.domain.usecase.FindVisuallySimilarUseCase
 import com.ssintelligence.app.ui.common.EmptyState
 import com.ssintelligence.app.ui.common.ScreenshotRow
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Visually similar screenshots (§6).
@@ -120,7 +121,7 @@ private fun SimilarRow(
     androidx.compose.material3.Surface(
         onClick = onClick,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = SsColors.SurfaceVariant,
     ) {
         androidx.compose.foundation.layout.Row(
             modifier = Modifier.padding(12.dp),
@@ -144,12 +145,12 @@ private fun SimilarRow(
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
                 Text(
                     text = com.ssintelligence.app.ui.common.DateFormats.formatDate(screenshot.dateAdded),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
         }

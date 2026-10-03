@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Expenses from screenshots (§17).
@@ -104,7 +105,7 @@ fun ExpensesScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        containerColor = SsColors.NavyPrimary,
                     ),
                 ) {
                     Column(
@@ -124,7 +125,7 @@ fun ExpensesScreen(
                             Text(
                                 text = "By category: $categorySummary",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = SsColors.TextSecondary,
                             )
                         }
                     }
@@ -135,7 +136,7 @@ fun ExpensesScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        containerColor = SsColors.SurfaceElevated,
                     ),
                     onClick = { onOpenScreenshot(expense.screenshotId) },
                 ) {
@@ -151,7 +152,7 @@ fun ExpensesScreen(
                                 LocalDate.ofEpochDay(expense.dateEpochDay).toString(),
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                         )
                         IconButton(onClick = { viewModel.delete(expense.id) }) {
                             Icon(Icons.Filled.Delete, contentDescription = "Delete expense")

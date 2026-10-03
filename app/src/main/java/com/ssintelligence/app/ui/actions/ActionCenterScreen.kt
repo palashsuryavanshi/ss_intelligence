@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Action center (§73): suggested and recent actions in one place.
@@ -89,7 +90,7 @@ fun ActionCenterScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        containerColor = SsColors.SurfaceElevated,
                     ),
                     onClick = { onOpenScreenshot(entry.screenshotId) },
                 ) {
@@ -99,9 +100,9 @@ fun ActionCenterScreen(
                             text = if (entry.success) "Completed" else "Did not complete",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (entry.success) {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                SsColors.TextSecondary
                             } else {
-                                MaterialTheme.colorScheme.error
+                                SsColors.Error
                             },
                         )
                     }

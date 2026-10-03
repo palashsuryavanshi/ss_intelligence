@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Timeline intelligence (§22–§24).
@@ -116,7 +117,7 @@ fun TimelineScreen(
                     Text(
                         text = dayLabel(day.epochDay),
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = SsColors.NavyAccent,
                         modifier = Modifier
                             .padding(top = 8.dp)
                             .semantics { heading() },
@@ -125,7 +126,7 @@ fun TimelineScreen(
                         Text(
                             text = day.categories.joinToString(" · "),
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                         )
                     }
                 }
@@ -145,7 +146,7 @@ private fun EventCard(
     androidx.compose.material3.Card(
         modifier = Modifier.fillMaxWidth(),
         colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = SsColors.SurfaceElevated,
         ),
     ) {
         androidx.compose.foundation.layout.Column(
@@ -156,7 +157,7 @@ private fun EventCard(
             Text(
                 text = "${event.memberIds.size} screenshot${if (event.memberIds.size == 1) "" else "s"}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
             androidx.compose.foundation.layout.Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

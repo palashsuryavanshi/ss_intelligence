@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ssintelligence.app.domain.model.Screenshot
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * A single screenshot in a list (§23): thumbnail, filename, date and a short
@@ -60,9 +61,9 @@ fun ScreenshotRow(
             ),
         colors = CardDefaults.cardColors(
             containerColor = if (selected) {
-                MaterialTheme.colorScheme.primaryContainer
+                SsColors.NavyPrimary
             } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
+                SsColors.Surface
             },
         ),
     ) {
@@ -90,15 +91,15 @@ fun ScreenshotRow(
                 Text(
                     text = DateFormats.formatDateTime(screenshot.dateAdded),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
                 Text(
                     text = preview ?: "No text found yet",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (preview == null) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        SsColors.TextSecondary
                     } else {
-                        MaterialTheme.colorScheme.onSurface
+                        SsColors.TextPrimary
                     },
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -113,7 +114,7 @@ fun ScreenshotRow(
                         Text(
                             text = "Duplicate",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                         )
                     }
                 }

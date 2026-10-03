@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Side-by-side comparison (§26, §55).
@@ -125,8 +126,8 @@ fun CompareScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            containerColor = SsColors.NavyPrimary,
+                            contentColor = SsColors.TextOnNavy,
                         ),
                     ) {
                         Text(
@@ -141,7 +142,7 @@ fun CompareScreen(
                     Text(
                         text = "No detected differences in prices or websites.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = SsColors.TextSecondary,
                     )
                 }
             }
@@ -162,7 +163,7 @@ fun CompareScreen(
                         Text(
                             text = "− ${comparison.removedTerms.joinToString(", ")}",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                             maxLines = 6,
                             overflow = TextOverflow.Ellipsis,
                         )

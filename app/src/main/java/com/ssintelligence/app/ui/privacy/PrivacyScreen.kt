@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Privacy center (§52): actual application metrics, never fabricated numbers.
@@ -77,7 +78,7 @@ fun PrivacyScreen(
                         "`INTERNET` permission, so it cannot upload screenshots, OCR text, " +
                         "embeddings or conversations even if it wanted to.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
             item("metrics") {
@@ -86,7 +87,7 @@ fun PrivacyScreen(
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                containerColor = SsColors.SurfaceElevated,
                             ),
                         ) {
                             Column(Modifier.padding(12.dp)) {

@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ssintelligence.app.domain.usecase.ObserveOnboardingUseCase
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * First-run introduction (§33). Deliberately short — there is no multi-page
@@ -53,14 +54,14 @@ fun OnboardingScreen(
                 "Nothing is uploaded and the app has no internet access at all.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
         Text(
             text = "You will be asked for permission to read your images. That is the only " +
                 "permission required, and your original screenshots are never modified or deleted.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
         Button(
             onClick = onGetStarted,

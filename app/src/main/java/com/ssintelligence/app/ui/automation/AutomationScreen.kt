@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Automation management (§72): rules, templates and history.
@@ -117,7 +118,7 @@ fun AutomationScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        containerColor = SsColors.SurfaceElevated,
                     ),
                 ) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -125,7 +126,7 @@ fun AutomationScreen(
                         Text(
                             text = template.description,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                         )
                         TextButton(onClick = { viewModel.enableTemplate(template) }) {
                             Text("Enable")
@@ -170,7 +171,7 @@ private fun RuleCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = SsColors.SurfaceElevated,
         ),
     ) {
         Row(
@@ -183,7 +184,7 @@ private fun RuleCard(
                 Text(
                     text = "${rule.triggerType} → ${rule.actionType}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
             }
             Switch(checked = rule.enabled, onCheckedChange = { onToggle() })
@@ -214,7 +215,7 @@ private fun NaturalLanguageBuilder(
                     text = "Example: \"Whenever I screenshot a receipt, put it in my " +
                         "Expenses collection.\"",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SsColors.TextSecondary,
                 )
                 OutlinedTextField(
                     value = text,

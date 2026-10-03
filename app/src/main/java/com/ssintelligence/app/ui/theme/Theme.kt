@@ -79,8 +79,17 @@ private val AmoledDarkColors = darkColorScheme(
     onSurface = Color(0xFFF1F5F9),
     surfaceVariant = Color(0xFF0B1628),
     onSurfaceVariant = Color(0xFF94A3B8),
+    surfaceContainer = Color(0xFF08111F),
+    surfaceContainerHigh = Color(0xFF0B1628),
+    surfaceContainerHighest = Color(0xFF0E1A2E),
+    surfaceContainerLow = Color(0xFF060D18),
+    surfaceContainerLowest = Color(0xFF040710),
     outline = Color(0xFF334155),
     outlineVariant = Color(0xFF1E293B),
+    inverseSurface = Color(0xFFF1F5F9),
+    inverseOnSurface = Color(0xFF0F172A),
+    inversePrimary = Color(0xFF0A3D91),
+    scrim = Color(0xFF000000),
 )
 
 private val LightColors = lightColorScheme(

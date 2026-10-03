@@ -62,6 +62,7 @@ import com.ssintelligence.app.ui.common.SectionHeader
 import com.ssintelligence.app.ui.common.StatusChip
 import com.ssintelligence.app.ui.common.errorMessage
 import com.ssintelligence.app.ui.theme.OcrTextStyle
+import com.ssintelligence.app.ui.theme.SsColors
 
 /**
  * Screenshot detail (§24): the image, the OCR text, and the structured
@@ -195,7 +196,7 @@ fun ScreenshotDetailScreen(
                             text = "Byte-identical to an earlier screenshot. Its extracted " +
                                 "information is reused instead of re-reading the image.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                         )
                     }
                 }
@@ -290,7 +291,7 @@ fun ScreenshotDetailScreen(
                             text = "Hidden by default. These are sensitive and are never shown " +
                                 "in lists or notifications.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                         )
                     }
                 }
@@ -302,7 +303,7 @@ fun ScreenshotDetailScreen(
                     Text(
                         text = "Nothing structured was detected in this screenshot.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = SsColors.TextSecondary,
                     )
                 }
             }
@@ -313,7 +314,7 @@ fun ScreenshotDetailScreen(
                     Text(
                         text = "No text was recognised.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = SsColors.TextSecondary,
                     )
                 } else {
                     // The outer LazyColumn already scrolls, so the OCR text is
@@ -321,7 +322,7 @@ fun ScreenshotDetailScreen(
                     // nesting two scrollables breaks measurement.
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            containerColor = SsColors.Surface,
                         ),
                     ) {
                         Text(
@@ -396,9 +397,9 @@ fun ScreenshotDetailScreen(
                         text = result.message,
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (result.success) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                            SsColors.TextSecondary
                         } else {
-                            MaterialTheme.colorScheme.error
+                            SsColors.Error
                         },
                         modifier = Modifier.clickable { viewModel.clearActionResult() },
                     )
@@ -432,7 +433,7 @@ private fun InfoCard(title: String, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = SsColors.Surface,
         ),
     ) {
         Column(
@@ -458,7 +459,7 @@ private fun BulletRow(value: String, subtitle: String? = null) {
             Text(
                 text = "  $subtitle",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = SsColors.TextSecondary,
             )
         }
     }
@@ -474,7 +475,7 @@ private fun PriceRow(price: ExtractedPrice) {
         Text(
             text = "${price.currency} ${price.amount}",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = SsColors.NavyAccent,
         )
     }
 }
@@ -491,7 +492,7 @@ private fun DateRow(date: ExtractedDate) {
             // UI never asserts a year the OCR did not read (§16).
             text = if (date.hasYear) DateFormats.formatEpochDay(date.epochDay) else "Year not stated",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
     }
 }
@@ -516,7 +517,7 @@ private fun CategoryCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = SsColors.Surface,
         ),
     ) {
         Column(
@@ -558,7 +559,7 @@ private fun CategoryCard(
                     Text(
                         text = "You chose this category. Automatic classification will not override it.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = SsColors.TextSecondary,
                     )
                 }
             } else {
@@ -668,7 +669,7 @@ private fun SuggestedActions(
                         Text(
                             text = description,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = SsColors.TextSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.fillMaxWidth(),
@@ -748,7 +749,7 @@ private fun PhoneRow(phone: ExtractedPhone) {
         Text(
             text = phone.normalized,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = SsColors.TextSecondary,
         )
     }
 }
