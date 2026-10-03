@@ -212,26 +212,26 @@ private fun MainNavigation(locator: ServiceLocator, startDestination: String? = 
         enterTransition = {
             slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(300),
-            ) + fadeIn(animationSpec = tween(300))
+                animationSpec = tween(200),
+            ) + fadeIn(animationSpec = tween(200))
         },
         exitTransition = {
             slideOutOfContainer(
                 AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(300),
-            ) + fadeOut(animationSpec = tween(300))
+                animationSpec = tween(200),
+            ) + fadeOut(animationSpec = tween(200))
         },
         popEnterTransition = {
             slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(300),
-            ) + fadeIn(animationSpec = tween(300))
+                animationSpec = tween(200),
+            ) + fadeIn(animationSpec = tween(200))
         },
         popExitTransition = {
             slideOutOfContainer(
                 AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(300),
-            ) + fadeOut(animationSpec = tween(300))
+                animationSpec = tween(200),
+            ) + fadeOut(animationSpec = tween(200))
         },
     ) {
         composable(Routes.HOME) {
