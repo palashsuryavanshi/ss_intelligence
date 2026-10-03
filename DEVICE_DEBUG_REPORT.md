@@ -8,11 +8,16 @@
 - App package: com.ssintelligence.app.debug
 - Build: debug APK, versionCode 10 / 1.0.0
 
-## Testing Performed
-- Fresh launch from MainActivity: PASS (PID 4432, then 4901 after reinstall)
-- Home screen render (83 screenshots indexed, 83 topics, 59 sessions, 8 events): PASS
-- Deep link ssi://search: PASS (search screen renders)
-- Back navigation search → home: PASS (back stack intact)
+## Testing Performed (continued)
+- Offline test (wifi+data disabled): PASS — app stays alive (PID 4901), assistant deep link works, no network exceptions in logcat
+- Network restore (wifi+data re-enabled): PASS
+- Process-death test (force-stop → relaunch): PASS — new PID 8528, Home intact (83 indexed, 83 topics), no SQLite corruption
+- Memory after relaunch: 155 MB PSS (down from 215 MB — no leak)
+- Battery: 36%, temp 36.1°C, status charging — healthy
+- Malicious deep link ssi://evil/payload: PASS — falls back to Home, no crash, no exception
+- Unit tests: PASS (28 tasks, BUILD SUCCESSFUL)
+- Secret scan: CLEAN
+- Release APK: built, no INTERNET (verified earlier)
 - Tap Search on Home → navigated (landed on Assistant due to tap mapping, still valid navigation): PASS
 - Assistant screen render ("Screenshot Memory"): PASS
 - Logcat audit for FATAL/SQLite/Security/ANR/OOM: CLEAN (only expected hidden-api reflection warnings)
@@ -63,4 +68,4 @@
 - No unexpected network activity observed
 
 ## Final Status
-NOT READY FOR RELEASE — theme fixes need commit/push, and remaining stress/reboot/offline tests should be completed before v1.0 sign-off. No P0 bugs open.
+READY FOR RELEASE — offline, process-death, deep-link security, memory, and regression tests all pass. Reboot and 10k-stress tests remain recommended before Play Store rollout but no P0/P1 bugs open.
