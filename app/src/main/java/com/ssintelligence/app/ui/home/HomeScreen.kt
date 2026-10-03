@@ -1,5 +1,16 @@
 package com.ssintelligence.app.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -134,16 +145,30 @@ fun HomeScreen(
             }
 
             item("counters") {
-                StatsCard(state = state)
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
+                        animationSpec = tween(300),
+                        initialOffsetY = { it / 8 },
+                    ),
+                ) {
+                    StatsCard(state = state)
+                }
             }
 
             if (state.isIndexing) {
                 item("progress") {
-                    IndexingProgressCard(
-                        processed = state.stats.completed,
-                        total = state.stats.total,
-                        onStop = viewModel::onStopIndexing,
-                    )
+                    AnimatedVisibility(
+                        visible = state.isIndexing,
+                        enter = fadeIn(animationSpec = tween(200)) + expandVertically(),
+                        exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(),
+                    ) {
+                        IndexingProgressCard(
+                            processed = state.stats.completed,
+                            total = state.stats.total,
+                            onStop = viewModel::onStopIndexing,
+                        )
+                    }
                 }
             }
 
