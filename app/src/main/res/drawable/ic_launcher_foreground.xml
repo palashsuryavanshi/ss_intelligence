@@ -1,41 +1,98 @@
-<!--
-  Adaptive launcher icon foreground: a magnifier over stacked screenshots.
-  Uses only <path> elements so the icon renders on every API level without
-  needing <shape> drawables or API-gated attributes.
--->
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SS Intelligence adaptive icon foreground: screenshot stack + AI sparkle -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
 
-    <!-- Back sheet -->
-    <path
-        android:fillColor="#7FB3FF"
-        android:pathData="M28,32h34v46h-34z" />
+    <!-- Back card -->
+    <group
+        android:translateX="180"
+        android:translateY="220"
+        android:rotation="-8">
+        <path
+            android:pathData="M0,0 L320,0 Q352,0 352,32 L352,420 Q352,452 320,452 L0,452 Q-32,452 -32,420 L-32,32 Q-32,0 0,0 Z"
+            android:fillColor="#1D4ED8"/>
+        <path
+            android:pathData="M32,32 L212,32 Q220,32 220,40 L220,48 Q220,56 212,56 L32,56 Q24,56 24,48 L24,40 Q24,32 32,32 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.15"/>
+        <path
+            android:pathData="M32,64 L152,64 Q158,64 158,70 L158,76 Q158,82 152,82 L32,82 Q26,82 26,76 L26,70 Q26,64 32,64 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.1"/>
+        <path
+            android:pathData="M32,100 L288,100 Q304,100 304,116 L304,204 Q304,220 288,220 L32,220 Q16,220 16,204 L16,116 Q16,100 32,100 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.08"/>
+    </group>
 
-    <!-- Front sheet -->
-    <path
-        android:fillColor="#E8EEF7"
-        android:pathData="M40,26h34v46h-34z" />
+    <!-- Middle card -->
+    <group
+        android:translateX="340"
+        android:translateY="180"
+        android:rotation="3">
+        <path
+            android:pathData="M0,0 L300,0 Q328,0 328,28 L328,400 Q328,428 300,428 L0,428 Q-28,428 -28,400 L-28,28 Q-28,0 0,0 Z"
+            android:fillColor="#3B82F6"/>
+        <path
+            android:pathData="M28,28 L188,28 Q195,28 195,35 L195,42 Q195,49 188,49 L28,49 Q21,49 21,42 L21,35 Q21,28 28,28 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.2"/>
+        <path
+            android:pathData="M28,56 L128,56 Q133,56 133,61 L133,66 Q133,71 128,71 L28,71 Q23,71 23,66 L23,61 Q23,56 28,56 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.12"/>
+        <path
+            android:pathData="M28,88 L272,88 Q284,88 284,100 L284,176 Q284,188 272,188 L28,188 Q16,188 16,176 L16,100 Q16,88 28,88 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.1"/>
+    </group>
 
-    <!-- Text lines on the front sheet -->
-    <path
-        android:fillColor="#0B1D3A"
-        android:pathData="M45,34h24v4h-24z M45,43h18v4h-18z M45,52h22v4h-22z" />
+    <!-- Front card -->
+    <group
+        android:translateX="520"
+        android:translateY="260"
+        android:rotation="-2">
+        <path
+            android:pathData="M0,0 L260,0 Q284,0 284,24 L284,340 Q284,364 260,364 L0,364 Q-24,364 -24,340 L-24,24 Q-24,0 0,0 Z"
+            android:fillColor="#0EA5E9"/>
+        <path
+            android:pathData="M24,24 L164,24 Q170,24 170,30 L170,36 Q170,42 164,42 L24,42 Q18,42 18,36 L18,30 Q18,24 24,24 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.25"/>
+        <path
+            android:pathData="M24,50 L114,50 Q118,50 118,54 L118,58 Q118,62 114,62 L24,62 Q20,62 20,58 L20,54 Q20,50 24,50 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.15"/>
+        <path
+            android:pathData="M24,76 L236,76 Q246,76 246,86 L246,146 Q246,156 236,156 L24,156 Q14,156 14,146 L14,86 Q14,76 24,76 Z"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.12"/>
+    </group>
 
-    <!-- Magnifier ring -->
-    <path
-        android:strokeColor="#7FB3FF"
-        android:strokeWidth="5"
-        android:fillColor="#00000000"
-        android:pathData="M57,54m-13,0a13,13 0,1 1,26 0a13,13 0,1 1,-26 0" />
+    <!-- AI Sparkle (four-point star) -->
+    <group
+        android:translateX="720"
+        android:translateY="200">
+        <path
+            android:pathData="M0,-48 C6,-20 20,-6 48,0 C20,6 6,20 0,48 C-6,20 -20,6 -48,0 C-20,-6 -6,-20 0,-48 Z"
+            android:fillColor="#67E8F9"/>
+        <path
+            android:pathData="M0,-24 C3,-10 10,-3 24,0 C10,3 3,10 0,24 C-3,10 -10,3 -24,0 C-10,-3 -3,-10 0,-24 Z"
+            android:fillColor="#E0F2FE"
+            android:fillAlpha="0.9"/>
+    </group>
 
-    <!-- Magnifier handle -->
-    <path
-        android:strokeColor="#7FB3FF"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M66,63 L78,75" />
+    <!-- Secondary sparkle -->
+    <group
+        android:translateX="240"
+        android:translateY="160">
+        <path
+            android:pathData="M0,-20 C3,-8 8,-3 20,0 C8,3 3,8 0,20 C-3,8 -8,3 -20,0 C-8,-3 -3,-8 0,-20 Z"
+            android:fillColor="#67E8F9"
+            android:fillAlpha="0.7"/>
+    </group>
+
 </vector>
