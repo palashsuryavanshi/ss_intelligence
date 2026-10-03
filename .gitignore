@@ -22,3 +22,19 @@ Thumbs.db
 keystore.properties
 google-services.json
 .env
+
+# Internal notes & dev docs — kept locally only, never pushed to GitHub.
+# Public docs live in docs/user/ and stay tracked:
+# README, docs/user/PRIVACY_POLICY, RELEASE_NOTES, KNOWN_LIMITATIONS,
+# FAQ, SUPPORT, TROUBLESHOOTING, THIRD_PARTY_LICENSES.
+docs/internal/
+# Future internal docs follow the same rule:
+*_ARCHITECTURE.md
+*_STRATEGY.md
+*_INVENTORY.md
+*_REPORT.md
+THREAT_MODEL*.md
+RELEASE_CHECKLIST*.md
+RELEASE_BUILD*.md
+V1_*.md
+PHASE*.md
