@@ -511,6 +511,23 @@ class LocalSemanticSearchInstrumentedTest {
         override suspend fun setContextActionsEnabled(enabled: Boolean) = Unit
         override suspend fun isExpenseExtractionEnabled(): Boolean = true
         override suspend fun setExpenseExtractionEnabled(enabled: Boolean) = Unit
+        // Phase 8
+        override suspend fun isAppLockEnabled(): Boolean = false
+        override suspend fun setAppLockEnabled(enabled: Boolean) = Unit
+        override suspend fun isSensitiveContentProtectionEnabled(): Boolean = true
+        override suspend fun setSensitiveContentProtectionEnabled(enabled: Boolean) = Unit
+        override suspend fun isSecureWindowEnabled(): Boolean = true
+        override suspend fun setSecureWindowEnabled(enabled: Boolean) = Unit
+        override suspend fun isNotificationPrivacyEnabled(): Boolean = true
+        override suspend fun setNotificationPrivacyEnabled(enabled: Boolean) = Unit
+        override suspend fun isClipboardProtectionEnabled(): Boolean = true
+        override suspend fun setClipboardProtectionEnabled(enabled: Boolean) = Unit
+        override suspend fun isAssistantHistoryEnabled(): Boolean = true
+        override suspend fun setAssistantHistoryEnabled(enabled: Boolean) = Unit
+        override suspend fun isAnalyticsEnabled(): Boolean = false
+        override suspend fun setAnalyticsEnabled(enabled: Boolean) = Unit
+        override suspend fun isCrashReportingEnabled(): Boolean = false
+        override suspend fun setCrashReportingEnabled(enabled: Boolean) = Unit
     }
 
     private object DisabledSettings : SettingsRepository by EnabledSettings {

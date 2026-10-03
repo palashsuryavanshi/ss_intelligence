@@ -40,6 +40,7 @@ import com.ssintelligence.app.security.ClipboardSecurityManager
 import com.ssintelligence.app.security.DataDeletionManager
 import com.ssintelligence.app.security.PrivacyManager
 import com.ssintelligence.app.security.SensitiveContentDetector
+import com.ssintelligence.app.security.ModelIntegrityManager
 import com.ssintelligence.app.semantic.HashedNgramEmbeddingProvider
 import com.ssintelligence.app.semantic.SemanticRepository
 import com.ssintelligence.app.vision.BitmapVisualAnalyzer
@@ -136,6 +137,10 @@ class ServiceLocator private constructor(context: Context) {
 
     val dataDeletionManager: DataDeletionManager by lazy {
         DataDeletionManager(database, screenshotRepository, actionRepository, autonomousRepository)
+    }
+
+    val modelIntegrityManager: ModelIntegrityManager by lazy {
+        ModelIntegrityManager(appContext)
     }
 
     val searchEngine: ScreenshotSearchEngine by lazy {

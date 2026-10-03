@@ -121,6 +121,9 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
+    // SQLCipher for database encryption
+    implementation(libs.sqlcipher.android)
+
     // Background indexing
     implementation(libs.androidx.work.runtime)
 

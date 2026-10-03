@@ -28,6 +28,7 @@ enum class RuleTrigger(val label: String) {
     URL_DETECTED("URL detected"),
     TOPIC_DETECTED("Topic detected"),
     COLLECTION_MATCH("Collection match"),
+    TIME_BASED("Time-based"),
 }
 
 /** A structured condition. JSON-serializable for storage. */
@@ -126,6 +127,47 @@ class AutomationEngine(
                 success = true,
                 createdAt = System.currentTimeMillis(),
             )
+        }
+        return out
+    }
+
+    /**
+     * Evaluates all enabled TIME_BASED rules against recent screenshots.
+     *
+     * Time-based rules do not depend on a specific screenshot discovery event;
+     * they fire periodically and apply to the most recent N screenshots that
+     * match their conditions. Each rule runs at most once per screenshot.
+     */
+    suspend fun evaluateTimeBasedRules(
+        recentScreenshotIds: List<Long>,
+        contextFor: suspend (Long) -> Map<String, String>,
+    ): List<RuleExecution> {
+        val rules = repository.observeRules().first()
+            .filter { stored: StoredAutomationRule ->
+                stored.enabled &&
+                    runCatching { RuleTrigger.valueOf(stored.triggerType) }.getOrNull() == RuleTrigger.TIME_BASED
+            }
+        val out = mutableListOf<RuleExecution>()
+        for (stored in rules) {
+            val action = runCatching { RuleActionType.valueOf(stored.actionType) }.getOrNull()
+                ?: continue
+            if (!AutomationSafety.allowedInAutomation(action)) continue
+            for (screenshotId in recentScreenshotIds) {
+                if (repository.hasExecuted(stored.id, screenshotId)) continue
+                val context = contextFor(screenshotId)
+                if (!conditionsMatch(parseConditions(stored.conditionJson), context)) continue
+                val result = execute(action, parseParams(stored.actionParamsJson), screenshotId)
+                repository.recordExecution(stored.id, screenshotId, action.name, result)
+                out += RuleExecution(
+                    ruleId = stored.id,
+                    ruleName = stored.name,
+                    screenshotId = screenshotId,
+                    actionType = action,
+                    result = result,
+                    success = true,
+                    createdAt = System.currentTimeMillis(),
+                )
+            }
         }
         return out
     }

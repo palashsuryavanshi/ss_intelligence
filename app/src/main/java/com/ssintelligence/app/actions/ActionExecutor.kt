@@ -184,13 +184,18 @@ class ActionExecutor(
 
     private fun share(action: ContextAction): ActionResult {
         val text = (action.payload as? ActionPayload.Text)?.text ?: return fail("Nothing to share")
+        // Privacy: redact sensitive patterns before sharing (§29).
+        // User should have been warned in UI; redaction is a second line of defense.
+        val safeText = if (com.ssintelligence.app.security.RedactionManager.containsSensitive(text)) {
+            com.ssintelligence.app.security.RedactionManager.redact(text)
+        } else text
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
+            putExtra(Intent.EXTRA_TEXT, safeText)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(Intent.createChooser(intent, "Share"))
-        return ActionResult(action.id, true, "Opening share sheet")
+        return ActionResult(action.id, true, "Opening share sheet" + if (safeText != text) " (sensitive content redacted)" else "")
     }
 
     private fun fail(reason: String) = ActionResult("error", false, reason)

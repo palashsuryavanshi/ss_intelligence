@@ -57,6 +57,31 @@ class AutonomousAnalysisWorker(
             setProgress(workDataOf(PROGRESS_DONE to processed))
         }
         com.ssintelligence.app.util.AppLog.i(TAG, "Autonomous analysis complete processed=$processed")
+
+        // Evaluate time-based automation rules against recent screenshots
+        runCatching {
+            if (runCatching { locator.settingsRepository.isAutomationEnabled() }.getOrDefault(true)) {
+                val engine = com.ssintelligence.app.automation.AutomationEngine(
+                    repository = locator.actionRepository,
+                    screenshots = locator.screenshotRepository,
+                    autonomousDao = locator.database.autonomousDao(),
+                    actionExecutor = locator.actionExecutor,
+                )
+                val recentIds = dao.recentRows(50).map { it.id }
+                engine.evaluateTimeBasedRules(recentIds) { id ->
+                    val row = dao.getById(id)
+                    val urls = dao.urlsForScreenshot(id)
+                    val prices = dao.pricesForScreenshot(id)
+                    mapOf(
+                        "type" to (row?.status ?: "unknown"),
+                        "url_count" to urls.size.toString(),
+                        "price_count" to prices.size.toString(),
+                        "ocr_length" to (row?.ocrText?.length ?: 0).toString(),
+                    )
+                }
+            }
+        }.onFailure { com.ssintelligence.app.util.AppLog.w(TAG, "Time-based automation evaluation failed: ${it.message}") }
+
         return Result.success()
     }
 

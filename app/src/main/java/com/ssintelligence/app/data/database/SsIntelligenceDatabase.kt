@@ -6,6 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import net.sqlcipher.database.SQLiteDatabase
+import net.sqlcipher.database.SupportFactory
 
 /**
  * The local screenshot index (§9, §10).
@@ -563,8 +565,10 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
             }
         }
 
-        fun build(context: Context): SsIntelligenceDatabase =
-            Room.databaseBuilder(context.applicationContext, SsIntelligenceDatabase::class.java, NAME)
+        fun build(context: Context): SsIntelligenceDatabase {
+            val passphrase = DatabasePassphraseProvider(context).getPassphrase()
+            return Room.databaseBuilder(context.applicationContext, SsIntelligenceDatabase::class.java, NAME)
+                .openHelperFactory(SupportFactory(passphrase))
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
                     MIGRATION_5_6, MIGRATION_6_7,
@@ -573,5 +577,6 @@ abstract class SsIntelligenceDatabase : RoomDatabase() {
                 // worse than a visible error. "Clear Index" in Settings is the
                 // explicit recovery path.
                 .build()
+        }
     }
 }
