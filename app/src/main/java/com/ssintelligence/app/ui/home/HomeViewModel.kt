@@ -85,15 +85,16 @@ class HomeViewModel(
             val repository = locator.autonomousRepository
             val events = runCatching { repository.events() }.getOrDefault(emptyList())
             val sessions = runCatching { repository.sessions() }.getOrDefault(emptyList())
-            val suggestions = runCatching { locator.screenshotRepository.getRecent(200) }
-                .getOrDefault(emptyList())
             // Important: screenshots whose event is confirmed or strongly matched.
+            // Batched into one query instead of one getById per id (N+1).
             val importantIds = events
                 .filter { it.confidence == com.ssintelligence.app.autonomous.EventConfidence.CONFIRMED ||
                     it.confidence == com.ssintelligence.app.autonomous.EventConfidence.STRONG }
                 .flatMap { it.screenshotIds }
                 .distinct()
-            _important.value = importantIds.mapNotNull { locator.screenshotRepository.getById(it) }
+            _important.value = runCatching {
+                locator.screenshotRepository.getByIds(importantIds)
+            }.getOrDefault(emptyList())
             // Insights: one line per detected structure, all reviewable.
             val insights = buildList {
                 val topicCount = runCatching { repository.topics() }.getOrDefault(emptyList()).size

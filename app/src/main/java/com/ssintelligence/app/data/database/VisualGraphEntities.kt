@@ -200,6 +200,10 @@ interface VisualDao {
     @Query("SELECT screenshot_id, dhash FROM screenshot_visuals")
     suspend fun allHashes(): List<VisualHashRow>
 
+    /** Most-recent hashes, capped in SQL so large libraries never load fully. */
+    @Query("SELECT screenshot_id, dhash FROM screenshot_visuals ORDER BY screenshot_id DESC LIMIT :limit")
+    suspend fun recentHashes(limit: Int): List<VisualHashRow>
+
     @Query("DELETE FROM screenshot_visuals WHERE screenshot_id = :screenshotId")
     suspend fun deleteVisual(screenshotId: Long)
 

@@ -705,11 +705,9 @@ class ScreenshotRepositoryImpl(
     override suspend fun nearDuplicateGroups(limit: Int): List<NearDuplicateGroup> {
         // Greedy clustering over group representatives: near-duplicate groups
         // are rare, so comparing each row against representatives (not every
-        // row) stays cheap. Input is capped at recent rows — same documented
+        // row) stays cheap. The scan window is capped in SQL — same documented
         // trade as the search candidate window.
-        val hashes = database.visualDao().allHashes()
-            .sortedByDescending { it.screenshotId }
-            .take(NEAR_DUP_SCAN_CAP)
+        val hashes = database.visualDao().recentHashes(NEAR_DUP_SCAN_CAP)
         val groups = mutableListOf<MutableList<com.ssintelligence.app.data.database.VisualHashRow>>()
         for (row in hashes) {
             val group = groups.firstOrNull { members ->

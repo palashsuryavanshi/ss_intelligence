@@ -68,6 +68,7 @@ fun ScreenshotThumbnail(
         AsyncImage(
             model = ImageRequest.Builder(context)
                 .data(screenshot.uri)
+                .size(144)
                 .crossfade(true)
                 .build(),
             contentDescription = contentDescription,
