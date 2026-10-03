@@ -22,14 +22,7 @@ class MainActivity : ComponentActivity() {
         val locator = ServiceLocator.install(applicationContext)
         val startDestination = intent?.data?.toAppRoute()
         setContent {
-            MaterialTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
-                    SsIntelligenceAppRoot(locator, startDestination = startDestination)
-                }
-            }
+            SsIntelligenceAppRoot(locator, startDestination = startDestination)
         }
     }
 }

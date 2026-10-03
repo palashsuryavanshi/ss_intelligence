@@ -139,7 +139,7 @@ fun SsIntelligenceAppRoot(
         onboardingResolved = onboarding().first()
     }
 
-    SsIntelligenceTheme(themeMode = themeMode) {
+    SsIntelligenceTheme(themeMode = themeMode, useDynamicColor = false) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = androidx.compose.material3.MaterialTheme.colorScheme.background,
