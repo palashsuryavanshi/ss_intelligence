@@ -14,9 +14,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CompareArrows
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,7 +94,7 @@ fun ScreenshotListScreen(
                             },
                             enabled = selection.size >= 2,
                         ) {
-                            Icon(Icons.Filled.Chat, contentDescription = "Ask about these screenshots")
+                            Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Ask about these screenshots")
                         }
                         // Compare and collect apply only to a multi-selection —
                         // they are never shown for a single screenshot (§25).
@@ -105,7 +105,7 @@ fun ScreenshotListScreen(
                                     selection = emptySet()
                                 },
                             ) {
-                                Icon(Icons.Filled.CompareArrows, contentDescription = "Compare selected screenshots")
+                                Icon(Icons.AutoMirrored.Filled.CompareArrows, contentDescription = "Compare selected screenshots")
                             }
                             IconButton(
                                 onClick = { showCollectDialog = true },

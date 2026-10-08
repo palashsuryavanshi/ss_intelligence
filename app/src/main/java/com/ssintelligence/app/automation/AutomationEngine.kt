@@ -200,7 +200,6 @@ class AutomationEngine(
         RuleActionType.CREATE_CALENDAR_EVENT -> executeCreateCalendarEvent(params)
         RuleActionType.SAVE_EXPENSE -> executeSaveExpense(params)
         RuleActionType.SHOW_NOTIFICATION -> "Notification queued"
-        else -> throw IllegalArgumentException("Unknown action type: $action")
     }
 
     private suspend fun executeAddToCollection(
@@ -244,7 +243,7 @@ class AutomationEngine(
         val location = params["location"]
         val description = params["description"]
         val result = actionExecutor?.createCalendarEventDirect(title, start, end, location, description)
-        return (result?.message as String?) ?: "Calendar event created (no executor)"
+        return result?.message ?: "Calendar event created (no executor)"
     }
 
     private suspend fun executeSaveExpense(

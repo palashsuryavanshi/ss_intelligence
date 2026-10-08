@@ -271,7 +271,7 @@ class LocalSearchEngine(
             return FusedResults(collapseDuplicates(ranked.map { it.toResult() }), false)
         }
         return try {
-            fuseWithSemantics(query, ranked, semantic!!, visualQueryId)
+            fuseWithSemantics(query, ranked, semantic, visualQueryId)
         } catch (error: Exception) {
             FusedResults(collapseDuplicates(ranked.map { it.toResult() }), false)
         }

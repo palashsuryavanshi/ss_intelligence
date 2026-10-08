@@ -69,7 +69,7 @@ object ReceiptExtractor {
             for (pattern in patterns) {
                 val matcher = pattern.matcher(text)
                 while (matcher.find()) {
-                    val amountStr = matcher.group(1).replace(",", "")
+                    val amountStr = matcher.group(1)?.replace(",", "") ?: continue
                     val amount = amountStr.toDoubleOrNull() ?: continue
                     val currency = when {
                         marker.startsWith("₹") || marker.startsWith("Rs") -> "INR"

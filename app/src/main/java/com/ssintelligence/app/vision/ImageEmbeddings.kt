@@ -35,7 +35,7 @@ data class ImageEmbedding(
             "Incompatible image embeddings: $model v$version vs ${other.model} v${other.version}."
         }
         val distance = hammingDistance(hash, other.hash)
-        return (1.0 - distance / DISSIMILAR_AT.toDouble()).coerceIn(0.0, 1.0)
+        return (1.0 - distance / DISSIMILAR_AT).coerceIn(0.0, 1.0)
     }
 
     companion object {

@@ -145,8 +145,16 @@ fun SsIntelligenceTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
-            window.statusBarColor = Color.Transparent.toArgb()
-            window.navigationBarColor = Color.Transparent.toArgb()
+            // API 35+ enforces edge-to-edge and ignores these two colours, so
+            // they are only set where the platform still honours them. Keeping
+            // the gate explicit preserves the transparent bars on API 29-34
+            // while keeping the deprecated setters off the modern path.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                @Suppress("DEPRECATION")
+                window.statusBarColor = Color.Transparent.toArgb()
+                @Suppress("DEPRECATION")
+                window.navigationBarColor = Color.Transparent.toArgb()
+            }
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

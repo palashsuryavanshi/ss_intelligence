@@ -83,7 +83,7 @@ android {
         getByName("androidTest") {
             // The migration test validates the migrated schema against the
             // exported JSON, which therefore has to be on the test device.
-            assets.srcDir("$projectDir/schemas")
+            assets.directories.add("$projectDir/schemas")
         }
     }
 }

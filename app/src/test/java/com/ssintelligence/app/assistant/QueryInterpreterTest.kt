@@ -80,15 +80,15 @@ class QueryInterpreterTest {
     @Test
     fun `last month resolves to a real calendar window`() {
         val q = interpreter.interpret("Pixel screenshots from last month", AssistantContext.Empty)
-        assertTrue(q.dateRange != null)
-        assertTrue(q.dateRange!!.endSeconds > q.dateRange!!.startSeconds)
+        val range = requireNotNull(q.dateRange) { "last month produced no window" }
+        assertTrue(range.endSeconds > range.startSeconds)
     }
 
     @Test
     fun `recently resolves to a two week window`() {
         val q = interpreter.interpret("What did I save recently?", AssistantContext.Empty)
-        assertTrue(q.dateRange != null)
-        val spanDays = (q.dateRange!!.endSeconds - q.dateRange!!.startSeconds) / 86_400.0
+        val range = requireNotNull(q.dateRange) { "recently produced no window" }
+        val spanDays = (range.endSeconds - range.startSeconds) / 86_400.0
         assertTrue("span was $spanDays days", spanDays in 13.0..15.0)
     }
 
